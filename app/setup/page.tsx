@@ -3,7 +3,7 @@
 import { useState, useEffect } from "react"
 import { useRouter } from "next/navigation"
 import Link from "next/link"
-import { 
+import {
   ArrowLeft,
   User,
   Palette,
@@ -22,9 +22,11 @@ import {
   Save,
   Lock,
   LogOut,
-  Loader2
+  Loader2,
+  Building2
 } from "lucide-react"
 import { teacherMonkey, teacherPringle, Teacher } from "@/lib/mock-data"
+import { SectionPreview } from "@/components/section-preview"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
@@ -55,19 +57,39 @@ interface AuthData {
   loginTime: string
 }
 
-const sidebarItems = [
-  { id: "overview", label: "總覽", icon: BarChart3 },
-  { id: "profile", label: "基本資料", icon: User },
-  { id: "template", label: "模板設定", icon: Palette },
-  { id: "courses", label: "課程管理", icon: BookOpen },
-  { id: "gallery", label: "成果展示", icon: ImageIcon },
-  { id: "testimonials", label: "客戶見證", icon: Star },
-  { id: "cases", label: "案例分享", icon: FolderOpen },
-  { id: "social", label: "社群連結", icon: Link2 },
-  { id: "contact", label: "聯絡設定", icon: Mail },
-  { id: "course-center", label: "接課中心", icon: Target },
-  { id: "explore", label: "探索其他才藝", icon: Compass },
+type SidebarItem = { id: string; label: string; icon: typeof BarChart3; description?: string }
+
+const sidebarGroups: { title?: string; subtitle?: string; items: SidebarItem[] }[] = [
+  {
+    items: [
+      { id: "overview", label: "總覽", icon: BarChart3 },
+    ],
+  },
+  {
+    title: "我的品牌頁",
+    subtitle: "編輯只屬於你的公開頁面內容",
+    items: [
+      { id: "profile",      label: "基本資料",     icon: User },
+      { id: "template",     label: "模板與排序",   icon: Palette },
+      { id: "courses",      label: "教授課程",     icon: BookOpen },
+      { id: "gallery",      label: "教學成果",     icon: ImageIcon },
+      { id: "testimonials", label: "客戶見證",     icon: Star },
+      { id: "cases",        label: "案例分享",     icon: FolderOpen },
+      { id: "social",       label: "社群連結",     icon: Link2 },
+      { id: "contact",      label: "聯絡與預約",   icon: Mail },
+    ],
+  },
+  {
+    title: "萊特平台",
+    subtitle: "與學院系統互動的功能",
+    items: [
+      { id: "course-center", label: "接課中心",     icon: Target,  description: "學院釋出的需求" },
+      { id: "explore",       label: "探索其他才藝", icon: Compass, description: "申請新的培訓"   },
+    ],
+  },
 ]
+
+const sidebarItems: SidebarItem[] = sidebarGroups.flatMap(g => g.items)
 
 export default function SetupPage() {
   const router = useRouter()
@@ -159,24 +181,42 @@ export default function SetupPage() {
       <div className="flex">
         {/* Sidebar */}
         <aside className="w-64 bg-white border-r border-slate-200 min-h-[calc(100vh-64px)] sticky top-16">
-          <nav className="p-4 space-y-1">
-            {sidebarItems.map((item) => {
-              const Icon = item.icon
-              return (
-                <button
-                  key={item.id}
-                  onClick={() => setActiveSection(item.id)}
-                  className={`w-full flex items-center gap-3 px-4 py-2.5 rounded-lg text-left transition-colors ${
-                    activeSection === item.id 
-                      ? "bg-red-50 text-red-600" 
-                      : "text-slate-600 hover:bg-slate-50"
-                  }`}
-                >
-                  <Icon className="w-5 h-5" />
-                  <span className="font-medium text-sm">{item.label}</span>
-                </button>
-              )
-            })}
+          <nav className="p-4 space-y-5">
+            {sidebarGroups.map((group, gi) => (
+              <div key={gi} className="space-y-1">
+                {group.title && (
+                  <div className="px-3 pt-1 pb-2">
+                    <div className="text-[11px] font-bold uppercase tracking-widest text-slate-400">{group.title}</div>
+                    {group.subtitle && (
+                      <div className="text-[11px] text-slate-400 mt-0.5">{group.subtitle}</div>
+                    )}
+                  </div>
+                )}
+                {group.items.map((item) => {
+                  const Icon = item.icon
+                  const active = activeSection === item.id
+                  return (
+                    <button
+                      key={item.id}
+                      onClick={() => setActiveSection(item.id)}
+                      className={`w-full flex items-center gap-3 px-3 py-2 rounded-lg text-left transition-colors ${
+                        active
+                          ? "bg-red-50 text-red-600"
+                          : "text-slate-600 hover:bg-slate-50"
+                      }`}
+                    >
+                      <Icon className="w-5 h-5 flex-shrink-0" />
+                      <span className="flex-1 min-w-0">
+                        <span className="block font-medium text-sm truncate">{item.label}</span>
+                        {item.description && (
+                          <span className="block text-[11px] text-slate-400 truncate">{item.description}</span>
+                        )}
+                      </span>
+                    </button>
+                  )
+                })}
+              </div>
+            ))}
           </nav>
         </aside>
 
@@ -186,13 +226,13 @@ export default function SetupPage() {
           {activeSection === "profile" && <ProfileSection teacher={teacher} />}
           {activeSection === "template" && <TemplateSection teacher={teacher} />}
           {activeSection === "courses" && <CoursesSection teacher={teacher} />}
+          {activeSection === "gallery" && <GalleryEditorSection teacher={teacher} />}
           {activeSection === "testimonials" && <TestimonialsSection teacher={teacher} />}
           {activeSection === "cases" && <CasesSection teacher={teacher} />}
+          {activeSection === "social" && <SocialEditorSection teacher={teacher} />}
+          {activeSection === "contact" && <ContactEditorSection teacher={teacher} />}
           {activeSection === "course-center" && <CourseCenterSection teacher={teacher} />}
           {activeSection === "explore" && <ExploreSection />}
-          {(activeSection === "gallery" || activeSection === "social" || activeSection === "contact") && (
-            <PlaceholderSection title={sidebarItems.find(i => i.id === activeSection)?.label || ""} />
-          )}
         </main>
       </div>
     </div>
@@ -238,7 +278,7 @@ function OverviewSection({ teacher }: { teacher: Teacher }) {
           </Button>
           <Button variant="outline" className="justify-start">
             <FolderOpen className="w-4 h-4 mr-2" />
-            新增��例
+            新增案例
           </Button>
           <Button variant="outline" className="justify-start">
             <Palette className="w-4 h-4 mr-2" />
@@ -279,8 +319,11 @@ function ProfileSection({ teacher }: { teacher: Teacher }) {
 
   return (
     <div>
-      <h1 className="text-2xl font-bold text-slate-800 mb-6">基本資料</h1>
-      
+      <h1 className="text-2xl font-bold text-slate-800 mb-1">基本資料</h1>
+      <p className="text-sm text-slate-500 mb-6">這裡編輯的內容會出現在頁面最上方的 Hero 與「關於我」區塊。</p>
+
+      <SectionPreview block="profile" teacher={teacher} />
+
       <div className="bg-white rounded-xl border border-slate-200 p-6">
         <form className="space-y-6">
           <div className="grid md:grid-cols-2 gap-6">
@@ -387,34 +430,59 @@ function TemplateSection({ teacher }: { teacher: Teacher }) {
 
   return (
     <div>
-      <h1 className="text-2xl font-bold text-slate-800 mb-6">模板設定</h1>
-      
+      <h1 className="text-2xl font-bold text-slate-800 mb-1">模板與排序</h1>
+      <p className="text-sm text-slate-500 mb-6">切換整體風格 (A/B/C) 並調整頁面區塊的上下順序。</p>
+
+      <SectionPreview block="template" teacher={teacher} />
+
       {/* Template Selection */}
       <div className="bg-white rounded-xl border border-slate-200 p-6 mb-6">
-        <h2 className="text-lg font-bold text-slate-800 mb-4">選擇模板風格</h2>
+        <div className="flex items-baseline justify-between mb-4">
+          <h2 className="text-lg font-bold text-slate-800">選擇模板風格</h2>
+          <p className="text-xs text-slate-500">已選擇 1 個模板，其他模板需額外解鎖</p>
+        </div>
         <div className="grid md:grid-cols-3 gap-4">
-          {templates.map((template) => (
-            <button
-              key={template.id}
-              onClick={() => setSelectedTemplate(template.id)}
-              className={`relative rounded-xl border-2 overflow-hidden transition-all ${
-                selectedTemplate === template.id 
-                  ? "border-red-500 ring-2 ring-red-200" 
-                  : "border-slate-200 hover:border-slate-300"
-              }`}
-            >
-              <div className={`h-32 bg-gradient-to-br ${template.color}`} />
-              <div className="p-4 text-left">
-                <div className="flex items-center gap-2 mb-1">
-                  <span className="font-bold text-slate-800">{template.name}</span>
-                  {selectedTemplate === template.id && (
-                    <Check className="w-4 h-4 text-red-500" />
-                  )}
+          {templates.map((template) => {
+            const isSelected = selectedTemplate === template.id
+            const isLocked = !isSelected
+            return (
+              <button
+                key={template.id}
+                onClick={() => {
+                  if (isLocked) return
+                  setSelectedTemplate(template.id)
+                }}
+                disabled={isLocked}
+                aria-disabled={isLocked}
+                className={`group relative rounded-xl border-2 overflow-hidden transition-all text-left ${
+                  isSelected
+                    ? "border-red-500 ring-2 ring-red-200"
+                    : "border-slate-200 cursor-not-allowed"
+                }`}
+              >
+                <div className={`h-32 bg-gradient-to-br ${template.color} ${isLocked ? "grayscale opacity-50" : ""}`} />
+                <div className={`p-4 ${isLocked ? "bg-slate-50" : ""}`}>
+                  <div className="flex items-center gap-2 mb-1">
+                    <span className={`font-bold ${isLocked ? "text-slate-500" : "text-slate-800"}`}>{template.name}</span>
+                    {isSelected && <Check className="w-4 h-4 text-red-500" />}
+                    {isLocked && <Lock className="w-3.5 h-3.5 text-slate-400" />}
+                  </div>
+                  <p className={`text-sm ${isLocked ? "text-slate-400" : "text-slate-500"}`}>{template.description}</p>
                 </div>
-                <p className="text-sm text-slate-500">{template.description}</p>
-              </div>
-            </button>
-          ))}
+
+                {isLocked && (
+                  <div className="absolute inset-0 flex flex-col items-center justify-center bg-slate-900/40 backdrop-blur-[2px]">
+                    <div className="flex items-center justify-center w-12 h-12 rounded-full bg-white/95 shadow-lg mb-2">
+                      <Lock className="w-5 h-5 text-slate-700" />
+                    </div>
+                    <span className="px-3 py-1 rounded-full bg-white/95 text-xs font-medium text-slate-700 shadow">
+                      解鎖此模板
+                    </span>
+                  </div>
+                )}
+              </button>
+            )
+          })}
         </div>
       </div>
 
@@ -517,12 +585,15 @@ function SortableBlock({ block, onToggle }: SortableBlockProps) {
 function CoursesSection({ teacher }: { teacher: Teacher }) {
   return (
     <div>
-      <div className="flex items-center justify-between mb-6">
-        <h1 className="text-2xl font-bold text-slate-800">課程管理</h1>
+      <div className="flex items-center justify-between mb-1">
+        <h1 className="text-2xl font-bold text-slate-800">教授課程</h1>
         <Button className="bg-red-600 hover:bg-red-700">
           新增課程
         </Button>
       </div>
+      <p className="text-sm text-slate-500 mb-6">這裡新增的課程會以卡片顯示在「教授課程」區塊。</p>
+
+      <SectionPreview block="courses" teacher={teacher} />
 
       <div className="space-y-4">
         {teacher.courses.map((course) => (
@@ -553,13 +624,16 @@ function CoursesSection({ teacher }: { teacher: Teacher }) {
 function TestimonialsSection({ teacher }: { teacher: Teacher }) {
   return (
     <div>
-      <div className="flex items-center justify-between mb-6">
+      <div className="flex items-center justify-between mb-1">
         <h1 className="text-2xl font-bold text-slate-800">客戶見證</h1>
         <div className="flex gap-2">
           <Button variant="outline">新增影片見證</Button>
           <Button className="bg-red-600 hover:bg-red-700">新增文字見證</Button>
         </div>
       </div>
+      <p className="text-sm text-slate-500 mb-6">影片見證會優先顯示在前，並用「推薦」徽章標示。</p>
+
+      <SectionPreview block="testimonials" teacher={teacher} />
 
       {/* Video Testimonials */}
       {teacher.testimonials.videos.length > 0 && (
@@ -611,10 +685,13 @@ function TestimonialsSection({ teacher }: { teacher: Teacher }) {
 function CasesSection({ teacher }: { teacher: Teacher }) {
   return (
     <div>
-      <div className="flex items-center justify-between mb-6">
+      <div className="flex items-center justify-between mb-1">
         <h1 className="text-2xl font-bold text-slate-800">案例分享</h1>
         <Button className="bg-red-600 hover:bg-red-700">新增案例</Button>
       </div>
+      <p className="text-sm text-slate-500 mb-6">列出你合作過的機構與專案，標記「持續合作中」會強調呈現。</p>
+
+      <SectionPreview block="cases" teacher={teacher} />
 
       <div className="space-y-4">
         {teacher.cases.map((c) => (
@@ -641,18 +718,37 @@ function CasesSection({ teacher }: { teacher: Teacher }) {
 }
 
 // ===== Course Center Section =====
+function PlatformBanner({ children }: { children: React.ReactNode }) {
+  return (
+    <div className="flex items-start gap-3 p-4 mb-6 rounded-xl bg-gradient-to-r from-red-50 to-orange-50 border border-red-100">
+      <div className="w-8 h-8 rounded-full bg-red-600 flex items-center justify-center flex-shrink-0">
+        <Building2 className="w-4 h-4 text-white" />
+      </div>
+      <div className="text-sm text-slate-700">
+        <span className="font-bold text-red-700">萊特平台功能</span>
+        <span className="mx-2 text-slate-300">|</span>
+        {children}
+      </div>
+    </div>
+  )
+}
+
 function CourseCenterSection({ teacher }: { teacher: Teacher }) {
   const [status, setStatus] = useState(teacher.courseStatus)
 
   const statusOptions = [
     { id: "open" as const, label: "開放接課", description: "目前可接新課程", color: "bg-green-500" },
     { id: "limited" as const, label: "名額有限", description: "僅剩少量時段", color: "bg-yellow-500" },
-    { id: "closed" as const, label: "暫停接課", description: "目前滿��", color: "bg-red-500" },
+    { id: "closed" as const, label: "暫停接課", description: "目前滿檔", color: "bg-red-500" },
   ]
 
   return (
     <div>
       <h1 className="text-2xl font-bold text-slate-800 mb-6">接課中心</h1>
+
+      <PlatformBanner>
+        這裡的接課狀態與課程需求由 <strong>萊特學院</strong> 統一管理；接課狀態會反映在你品牌頁的 Hero 標籤上。
+      </PlatformBanner>
 
       {/* Status Toggle */}
       <div className="bg-white rounded-xl border border-slate-200 p-6 mb-6">
@@ -734,6 +830,10 @@ function ExploreSection() {
       <h1 className="text-2xl font-bold text-slate-800 mb-2">探索其他才藝</h1>
       <p className="text-slate-500 mb-6">學習新才藝，擴大接課範圍！</p>
 
+      <PlatformBanner>
+        所有培訓課程由 <strong>萊特學院</strong> 提供；完成培訓後即可在你的品牌頁與接課中心新增該才藝。
+      </PlatformBanner>
+
       {/* My Skills Summary */}
       <div className="bg-gradient-to-r from-red-500 to-orange-500 rounded-xl p-6 text-white mb-6">
         <div className="flex items-center justify-between">
@@ -781,14 +881,111 @@ function ExploreSection() {
   )
 }
 
-// ===== Placeholder Section =====
-function PlaceholderSection({ title }: { title: string }) {
+// ===== Gallery Editor =====
+function GalleryEditorSection({ teacher }: { teacher: Teacher }) {
   return (
     <div>
-      <h1 className="text-2xl font-bold text-slate-800 mb-6">{title}</h1>
-      <div className="bg-white rounded-xl border border-slate-200 p-12 text-center">
-        <div className="text-slate-400 mb-4">此區塊功能開發中</div>
-        <Button variant="outline">返回總覽</Button>
+      <h1 className="text-2xl font-bold text-slate-800 mb-1">教學成果</h1>
+      <p className="text-sm text-slate-500 mb-6">上傳課程現場照片，數據統計會自動帶入頁面。</p>
+
+      <SectionPreview block="gallery" teacher={teacher} />
+
+      <div className="bg-white rounded-xl border border-slate-200 p-6 mb-6">
+        <h2 className="text-lg font-bold text-slate-800 mb-4">課程照片</h2>
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+          {[1, 2, 3, 4, 5, 6, 7, 8].map(i => (
+            <button key={i} className="aspect-square rounded-lg border-2 border-dashed border-slate-300 hover:border-red-400 hover:bg-red-50 transition-colors flex flex-col items-center justify-center text-slate-400 hover:text-red-500 text-sm">
+              <ImageIcon className="w-6 h-6 mb-1" />
+              照片 {i}
+            </button>
+          ))}
+        </div>
+        <p className="text-xs text-slate-400 mt-3">建議上傳 8 張以上、橫式或正方形、每張 ≤ 2MB</p>
+      </div>
+
+      <div className="bg-white rounded-xl border border-slate-200 p-6">
+        <h2 className="text-lg font-bold text-slate-800 mb-4">數據統計</h2>
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+          {[
+            { label: "累計教學時數", value: teacher.stats.totalHours },
+            { label: "累計服務學生", value: teacher.stats.totalStudents },
+            { label: "合作機構", value: teacher.stats.totalPartners },
+            { label: "教學年資", value: teacher.yearsOfExperience },
+          ].map(s => (
+            <div key={s.label}>
+              <label className="block text-xs text-slate-500 mb-1">{s.label}</label>
+              <Input type="number" defaultValue={s.value} />
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
+  )
+}
+
+// ===== Social Editor =====
+function SocialEditorSection({ teacher }: { teacher: Teacher }) {
+  const fields: { key: keyof typeof teacher.social; label: string; placeholder: string }[] = [
+    { key: "facebook",  label: "Facebook",  placeholder: "https://facebook.com/your-page" },
+    { key: "instagram", label: "Instagram", placeholder: "https://instagram.com/your-handle" },
+    { key: "youtube",   label: "YouTube",   placeholder: "https://youtube.com/@your-channel" },
+    { key: "line",      label: "LINE",      placeholder: "https://line.me/ti/p/your-id" },
+  ]
+  return (
+    <div>
+      <h1 className="text-2xl font-bold text-slate-800 mb-1">社群連結</h1>
+      <p className="text-sm text-slate-500 mb-6">留空的平台不會顯示，但建議至少連結 1 個 ✦。</p>
+
+      <SectionPreview block="social" teacher={teacher} />
+
+      <div className="bg-white rounded-xl border border-slate-200 p-6 space-y-4">
+        {fields.map(f => (
+          <div key={f.key}>
+            <label className="block text-sm font-medium text-slate-700 mb-2">{f.label}</label>
+            <Input defaultValue={teacher.social[f.key] as string | undefined} placeholder={f.placeholder} />
+          </div>
+        ))}
+        <div className="flex justify-end pt-2">
+          <Button className="bg-red-600 hover:bg-red-700">
+            <Save className="w-4 h-4 mr-2" />儲存
+          </Button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+// ===== Contact Editor =====
+function ContactEditorSection({ teacher }: { teacher: Teacher }) {
+  return (
+    <div>
+      <h1 className="text-2xl font-bold text-slate-800 mb-1">聯絡與預約</h1>
+      <p className="text-sm text-slate-500 mb-6">公開的聯絡資訊；表單收到的諮詢會 Email 通知你。</p>
+
+      <SectionPreview block="contact" teacher={teacher} />
+
+      <div className="grid md:grid-cols-2 gap-6">
+        <div className="bg-white rounded-xl border border-slate-200 p-6">
+          <h2 className="text-lg font-bold text-slate-800 mb-4">聯絡資訊</h2>
+          <div className="space-y-4">
+            <div>
+              <label className="block text-sm font-medium text-slate-700 mb-2">Email</label>
+              <Input defaultValue={teacher.contact.email} placeholder="you@example.com" />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-slate-700 mb-2">電話</label>
+              <Input defaultValue={teacher.contact.phone} placeholder="(02) 1234-5678" />
+            </div>
+          </div>
+        </div>
+        <div className="bg-white rounded-xl border border-slate-200 p-6">
+          <h2 className="text-lg font-bold text-slate-800 mb-4">諮詢表單</h2>
+          <div className="space-y-3 text-sm text-slate-600">
+            <div className="flex items-center gap-2"><Check className="w-4 h-4 text-green-500" />收件 Email 自動同步上方</div>
+            <div className="flex items-center gap-2"><Check className="w-4 h-4 text-green-500" />自動防垃圾訊息</div>
+            <div className="flex items-center gap-2"><Check className="w-4 h-4 text-green-500" />訊息會同步轉發至萊特官方客服備援</div>
+          </div>
+        </div>
       </div>
     </div>
   )
