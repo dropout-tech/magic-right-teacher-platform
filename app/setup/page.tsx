@@ -23,10 +23,12 @@ import {
   Lock,
   LogOut,
   Loader2,
-  Building2
+  Building2,
+  MessageCircle
 } from "lucide-react"
 import { teacherMonkey, teacherPringle, Teacher } from "@/lib/mock-data"
 import { SectionPreview } from "@/components/section-preview"
+import { LineOaSetup } from "@/components/line-oa-setup"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
@@ -57,7 +59,16 @@ interface AuthData {
   loginTime: string
 }
 
-type SidebarItem = { id: string; label: string; icon: typeof BarChart3; description?: string }
+type SidebarItem = {
+  id: string
+  label: string
+  icon: typeof BarChart3
+  description?: string
+  accent?: string // override color for highlight (e.g., LINE green)
+  badge?: string  // small label like "新"
+}
+
+const LINE_GREEN = "#06C755"
 
 const sidebarGroups: { title?: string; subtitle?: string; items: SidebarItem[] }[] = [
   {
@@ -85,6 +96,13 @@ const sidebarGroups: { title?: string; subtitle?: string; items: SidebarItem[] }
     items: [
       { id: "course-center", label: "接課中心",     icon: Target,  description: "學院釋出的需求" },
       { id: "explore",       label: "探索其他才藝", icon: Compass, description: "申請新的培訓"   },
+    ],
+  },
+  {
+    title: "外部整合",
+    subtitle: "把品牌延伸到其他平台",
+    items: [
+      { id: "line-oa", label: "LINE 串接", icon: MessageCircle, description: "建立 LINE 官方帳號", accent: LINE_GREEN, badge: "新" },
     ],
   },
 ]
@@ -195,19 +213,39 @@ export default function SetupPage() {
                 {group.items.map((item) => {
                   const Icon = item.icon
                   const active = activeSection === item.id
+                  const accent = item.accent
+                  const activeStyle = accent
+                    ? { backgroundColor: accent + "1a", color: accent }
+                    : undefined
                   return (
                     <button
                       key={item.id}
                       onClick={() => setActiveSection(item.id)}
+                      style={active ? activeStyle : undefined}
                       className={`w-full flex items-center gap-3 px-3 py-2 rounded-lg text-left transition-colors ${
                         active
-                          ? "bg-red-50 text-red-600"
+                          ? accent
+                            ? ""
+                            : "bg-red-50 text-red-600"
                           : "text-slate-600 hover:bg-slate-50"
                       }`}
                     >
-                      <Icon className="w-5 h-5 flex-shrink-0" />
+                      <Icon
+                        className="w-5 h-5 flex-shrink-0"
+                        style={!active && accent ? { color: accent } : undefined}
+                      />
                       <span className="flex-1 min-w-0">
-                        <span className="block font-medium text-sm truncate">{item.label}</span>
+                        <span className="flex items-center gap-1.5">
+                          <span className="font-medium text-sm truncate">{item.label}</span>
+                          {item.badge && (
+                            <span
+                              className="text-[9px] font-bold px-1.5 py-0.5 rounded text-white flex-shrink-0"
+                              style={{ backgroundColor: accent ?? "#ef4444" }}
+                            >
+                              {item.badge}
+                            </span>
+                          )}
+                        </span>
                         {item.description && (
                           <span className="block text-[11px] text-slate-400 truncate">{item.description}</span>
                         )}
@@ -233,6 +271,7 @@ export default function SetupPage() {
           {activeSection === "contact" && <ContactEditorSection teacher={teacher} />}
           {activeSection === "course-center" && <CourseCenterSection teacher={teacher} />}
           {activeSection === "explore" && <ExploreSection />}
+          {activeSection === "line-oa" && <LineOaSetup />}
         </main>
       </div>
     </div>
