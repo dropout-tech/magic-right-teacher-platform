@@ -16,14 +16,52 @@ import {
   QrCode,
   BarChart3,
   Trash2,
-  Sparkles
+  Sparkles,
+  ShieldCheck,
+  CalendarClock,
+  Lock,
+  Unlock,
+  AlertTriangle,
+  PauseCircle,
+  PlayCircle,
 } from "lucide-react"
-import { teachers as staticTeachers } from "@/lib/mock-data"
-import { addStoredTeacher, buildDefaultTeacher, buildShareableUrl, getAllTeachers, getStoredTeachers, removeStoredTeacher, slugify } from "@/lib/teacher-storage"
+import { PLAN_LABELS, PLAN_PRESETS, teachers as staticTeachers, type Subscription, type SubscriptionPlan, type TemplateId } from "@/lib/mock-data"
+import {
+  addDaysISO,
+  addStoredTeacher,
+  buildDefaultTeacher,
+  buildShareableUrl,
+  buildSubscription,
+  daysUntilExpiry,
+  effectiveSubscriptionStatus,
+  getAllTeachers,
+  getStoredTeachers,
+  removeStoredTeacher,
+  slugify,
+  upsertTeacher,
+} from "@/lib/teacher-storage"
 import type { Teacher } from "@/lib/mock-data"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Badge } from "@/components/ui/badge"
+import { Checkbox } from "@/components/ui/checkbox"
+import { Label } from "@/components/ui/label"
+import { Textarea } from "@/components/ui/textarea"
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select"
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog"
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -32,7 +70,7 @@ import {
 } from "@/components/ui/dropdown-menu"
 
 export default function AdminDashboard() {
-  const [activeTab, setActiveTab] = useState<"dashboard" | "create" | "list">("dashboard")
+  const [activeTab, setActiveTab] = useState<"dashboard" | "create" | "list" | "subscriptions">("dashboard")
 
   return (
     <div className="min-h-screen bg-slate-50">
@@ -68,13 +106,15 @@ export default function AdminDashboard() {
             <SidebarItem icon={<BarChart3 className="w-5 h-5" />} label="總覽儀表板" active={activeTab === "dashboard"} onClick={() => setActiveTab("dashboard")} />
             <SidebarItem icon={<Plus className="w-5 h-5" />} label="一鍵建立老師" active={activeTab === "create"} onClick={() => setActiveTab("create")} />
             <SidebarItem icon={<Users className="w-5 h-5" />} label="老師管理列表" active={activeTab === "list"} onClick={() => setActiveTab("list")} />
+            <SidebarItem icon={<ShieldCheck className="w-5 h-5" />} label="訂閱與權限" active={activeTab === "subscriptions"} onClick={() => setActiveTab("subscriptions")} />
           </nav>
         </aside>
 
         <main className="flex-1 p-8">
-          {activeTab === "dashboard" && <DashboardView onCreate={() => setActiveTab("create")} />}
+          {activeTab === "dashboard" && <DashboardView onCreate={() => setActiveTab("create")} onManageSubs={() => setActiveTab("subscriptions")} />}
           {activeTab === "create" && <CreateTeacherView onDone={() => setActiveTab("list")} />}
           {activeTab === "list" && <TeacherListView />}
+          {activeTab === "subscriptions" && <SubscriptionsView />}
         </main>
       </div>
     </div>
@@ -96,20 +136,33 @@ function SidebarItem({ icon, label, active, onClick }: { icon: React.ReactNode, 
 }
 
 // ===== Dashboard View =====
-function DashboardView({ onCreate }: { onCreate: () => void }) {
-  const [stored, setStored] = useState<Teacher[]>([])
-  useEffect(() => { setStored(getStoredTeachers()) }, [])
-  const all = useMemo(() => [...staticTeachers, ...stored], [stored])
+function DashboardView({ onCreate, onManageSubs }: { onCreate: () => void, onManageSubs: () => void }) {
+  const [list, setList] = useState<Teacher[]>(() => staticTeachers)
+  useEffect(() => { setList(getAllTeachers()) }, [])
+
+  const expiringSoon = useMemo(
+    () => list.filter(t => {
+      const status = effectiveSubscriptionStatus(t.subscription)
+      if (status !== "active") return false
+      const days = t.subscription ? daysUntilExpiry(t.subscription) : 0
+      return days <= 30
+    }),
+    [list]
+  )
+  const expired = useMemo(
+    () => list.filter(t => effectiveSubscriptionStatus(t.subscription) === "expired"),
+    [list]
+  )
 
   return (
     <div>
       <h1 className="text-2xl font-bold text-slate-800 mb-6">總覽儀表板</h1>
 
       <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
-        <StatCard title="老師總數" value={all.length} icon={<Users className="w-6 h-6" />} color="blue" />
-        <StatCard title="開放接課" value={all.filter(t => t.courseStatus === "open").length} icon={<Check className="w-6 h-6" />} color="green" />
-        <StatCard title="本週瀏覽" value="1,234" icon={<Eye className="w-6 h-6" />} color="purple" />
-        <StatCard title="本週新增" value={stored.length} icon={<Sparkles className="w-6 h-6" />} color="orange" />
+        <StatCard title="老師總數" value={list.length} icon={<Users className="w-6 h-6" />} color="blue" />
+        <StatCard title="開放接課" value={list.filter(t => t.courseStatus === "open").length} icon={<Check className="w-6 h-6" />} color="green" />
+        <StatCard title="30 天內到期" value={expiringSoon.length} icon={<CalendarClock className="w-6 h-6" />} color="orange" />
+        <StatCard title="已過期" value={expired.length} icon={<AlertTriangle className="w-6 h-6" />} color="red" />
       </div>
 
       <div className="bg-white rounded-xl border border-slate-200 p-6 mb-8">
@@ -119,16 +172,47 @@ function DashboardView({ onCreate }: { onCreate: () => void }) {
             <Plus className="w-4 h-4 mr-2" />
             新增老師頁面
           </Button>
+          <Button variant="outline" onClick={onManageSubs}>
+            <ShieldCheck className="w-4 h-4 mr-2" />
+            管理訂閱與權限
+          </Button>
           <Button variant="outline">
             <QrCode className="w-4 h-4 mr-2" />
             批次生成 QRCode
           </Button>
-          <Button variant="outline">
-            <Copy className="w-4 h-4 mr-2" />
-            複製所有連結
-          </Button>
         </div>
       </div>
+
+      {(expiringSoon.length > 0 || expired.length > 0) && (
+        <div className="bg-white rounded-xl border border-slate-200 p-6 mb-8">
+          <h2 className="text-lg font-bold text-slate-800 mb-4 flex items-center gap-2">
+            <AlertTriangle className="w-5 h-5 text-orange-500" />
+            訂閱提醒
+          </h2>
+          <div className="space-y-3">
+            {expired.map(t => (
+              <div key={t.id} className="flex items-center justify-between py-2 px-3 bg-red-50 border border-red-100 rounded-lg">
+                <div className="flex items-center gap-3">
+                  <Badge className="bg-red-100 text-red-700">已過期</Badge>
+                  <span className="font-medium text-slate-800">{t.name}</span>
+                  <span className="text-sm text-slate-500">於 {t.subscription?.endDate} 到期</span>
+                </div>
+                <Button size="sm" variant="outline" onClick={onManageSubs}>處理</Button>
+              </div>
+            ))}
+            {expiringSoon.map(t => (
+              <div key={t.id} className="flex items-center justify-between py-2 px-3 bg-amber-50 border border-amber-100 rounded-lg">
+                <div className="flex items-center gap-3">
+                  <Badge className="bg-amber-100 text-amber-700">{daysUntilExpiry(t.subscription!)} 天後到期</Badge>
+                  <span className="font-medium text-slate-800">{t.name}</span>
+                  <span className="text-sm text-slate-500">{PLAN_LABELS[t.subscription!.plan]} 方案</span>
+                </div>
+                <Button size="sm" variant="outline" onClick={onManageSubs}>續訂</Button>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       <div className="bg-white rounded-xl border border-slate-200 p-6">
         <h2 className="text-lg font-bold text-slate-800 mb-4">近期活動</h2>
@@ -154,7 +238,8 @@ function StatCard({ title, value, icon, color }: { title: string, value: number 
     blue: "bg-blue-50 text-blue-600",
     green: "bg-green-50 text-green-600",
     purple: "bg-purple-50 text-purple-600",
-    orange: "bg-orange-50 text-orange-600"
+    orange: "bg-orange-50 text-orange-600",
+    red: "bg-red-50 text-red-600",
   }
 
   return (
@@ -493,7 +578,7 @@ function TeacherListView() {
               <th className="px-6 py-4 text-left text-sm font-medium text-slate-500">模板</th>
               <th className="px-6 py-4 text-left text-sm font-medium text-slate-500">完成度</th>
               <th className="px-6 py-4 text-left text-sm font-medium text-slate-500">接課狀態</th>
-              <th className="px-6 py-4 text-left text-sm font-medium text-slate-500">瀏覽次數</th>
+              <th className="px-6 py-4 text-left text-sm font-medium text-slate-500">訂閱</th>
               <th className="px-6 py-4 text-left text-sm font-medium text-slate-500">操作</th>
             </tr>
           </thead>
@@ -531,7 +616,7 @@ function TeacherListView() {
                   </Badge>
                 </td>
                 <td className="px-6 py-4">
-                  <span className="text-slate-600">{isCreated(teacher.id) ? 0 : Math.floor(Math.random() * 500 + 100)}</span>
+                  <SubscriptionInlineBadge teacher={teacher} />
                 </td>
                 <td className="px-6 py-4">
                   <div className="flex items-center gap-2">
@@ -578,5 +663,422 @@ function TeacherListView() {
         ※ 新建立的老師資料目前以 localStorage 保存（demo 用），重新整理頁面後仍可使用。
       </p>
     </div>
+  )
+}
+
+// ===== Subscriptions View =====
+const TEMPLATE_LABELS: Record<TemplateId, string> = { A: "舞台魔術", B: "童趣派對", C: "雜誌編輯" }
+const ALL_TEMPLATES: TemplateId[] = ["A", "B", "C"]
+const ALL_PLANS: SubscriptionPlan[] = ["trial", "basic", "pro", "flagship"]
+
+function SubscriptionInlineBadge({ teacher }: { teacher: Teacher }) {
+  const sub = teacher.subscription
+  const eff = effectiveSubscriptionStatus(sub)
+  if (!sub) {
+    return <Badge className="bg-slate-100 text-slate-500">未設定</Badge>
+  }
+  const days = daysUntilExpiry(sub)
+  let badgeClass = "bg-emerald-100 text-emerald-700"
+  let label = `${PLAN_LABELS[sub.plan]}・剩 ${days} 天`
+  if (eff === "paused") { badgeClass = "bg-slate-100 text-slate-700"; label = `${PLAN_LABELS[sub.plan]}・已暫停` }
+  else if (eff === "expired") { badgeClass = "bg-red-100 text-red-700"; label = `${PLAN_LABELS[sub.plan]}・已過期` }
+  else if (days <= 7) badgeClass = "bg-red-100 text-red-700"
+  else if (days <= 30) badgeClass = "bg-amber-100 text-amber-700"
+
+  return (
+    <div className="flex flex-col gap-1">
+      <Badge className={`${badgeClass} w-fit`}>{label}</Badge>
+      <div className="text-xs text-slate-400">至 {sub.endDate}</div>
+    </div>
+  )
+}
+
+function SubscriptionsView() {
+  const [list, setList] = useState<Teacher[]>(() => staticTeachers)
+  const [search, setSearch] = useState("")
+  const [statusFilter, setStatusFilter] = useState<"all" | "active" | "expiring" | "expired" | "paused">("all")
+  const [editing, setEditing] = useState<Teacher | null>(null)
+
+  const refresh = () => setList(getAllTeachers())
+  useEffect(() => { refresh() }, [])
+
+  const filtered = useMemo(() => {
+    return list.filter(t => {
+      if (search && !t.name.toLowerCase().includes(search.toLowerCase())) return false
+      const eff = effectiveSubscriptionStatus(t.subscription)
+      if (statusFilter === "all") return true
+      if (statusFilter === "active") {
+        if (eff !== "active") return false
+        const days = t.subscription ? daysUntilExpiry(t.subscription) : 0
+        return days > 30
+      }
+      if (statusFilter === "expiring") {
+        if (eff !== "active") return false
+        const days = t.subscription ? daysUntilExpiry(t.subscription) : 0
+        return days <= 30
+      }
+      if (statusFilter === "expired") return eff === "expired"
+      if (statusFilter === "paused") return eff === "paused"
+      return true
+    })
+  }, [list, search, statusFilter])
+
+  const handleSave = (teacher: Teacher, sub: Subscription) => {
+    const updated: Teacher = { ...teacher, subscription: sub, template: sub.unlockedTemplates.includes(teacher.template) ? teacher.template : (sub.unlockedTemplates[0] ?? teacher.template) }
+    upsertTeacher(updated)
+    refresh()
+    setEditing(null)
+  }
+
+  const handleTogglePause = (teacher: Teacher) => {
+    if (!teacher.subscription) return
+    const next: Subscription = { ...teacher.subscription, status: teacher.subscription.status === "paused" ? "active" : "paused" }
+    upsertTeacher({ ...teacher, subscription: next })
+    refresh()
+  }
+
+  const handleQuickRenew = (teacher: Teacher, days: number) => {
+    if (!teacher.subscription) return
+    const today = new Date().toISOString().slice(0, 10)
+    const base = daysUntilExpiry(teacher.subscription) >= 0 ? teacher.subscription.endDate : today
+    const next: Subscription = { ...teacher.subscription, status: "active", endDate: addDaysISO(base, days) }
+    upsertTeacher({ ...teacher, subscription: next })
+    refresh()
+  }
+
+  return (
+    <div>
+      <div className="flex items-center justify-between mb-6">
+        <div>
+          <h1 className="text-2xl font-bold text-slate-800">訂閱與權限</h1>
+          <p className="text-sm text-slate-500 mt-1">管理每位老師的服務期限、方案與可用模板</p>
+        </div>
+      </div>
+
+      <div className="flex flex-wrap items-center gap-3 mb-6">
+        <div className="relative flex-1 min-w-[240px] max-w-sm">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+          <Input
+            placeholder="搜尋老師..."
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            className="pl-10"
+          />
+        </div>
+        <div className="flex gap-2">
+          {([
+            { id: "all", label: "全部" },
+            { id: "active", label: "啟用中" },
+            { id: "expiring", label: "即將到期" },
+            { id: "expired", label: "已過期" },
+            { id: "paused", label: "已暫停" },
+          ] as const).map(opt => (
+            <button
+              key={opt.id}
+              onClick={() => setStatusFilter(opt.id)}
+              className={`px-3 py-1.5 rounded-lg text-sm border transition-colors ${
+                statusFilter === opt.id
+                  ? "bg-slate-900 text-white border-slate-900"
+                  : "bg-white text-slate-600 border-slate-200 hover:bg-slate-50"
+              }`}
+            >
+              {opt.label}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+        {filtered.map(teacher => (
+          <SubscriptionCard
+            key={teacher.id}
+            teacher={teacher}
+            onEdit={() => setEditing(teacher)}
+            onTogglePause={() => handleTogglePause(teacher)}
+            onQuickRenew={(days) => handleQuickRenew(teacher, days)}
+          />
+        ))}
+        {filtered.length === 0 && (
+          <div className="col-span-full bg-white rounded-xl border border-slate-200 p-10 text-center text-slate-500">
+            目前沒有符合條件的老師
+          </div>
+        )}
+      </div>
+
+      {editing && (
+        <SubscriptionEditDialog
+          teacher={editing}
+          onClose={() => setEditing(null)}
+          onSave={handleSave}
+        />
+      )}
+    </div>
+  )
+}
+
+function SubscriptionCard({
+  teacher,
+  onEdit,
+  onTogglePause,
+  onQuickRenew,
+}: {
+  teacher: Teacher
+  onEdit: () => void
+  onTogglePause: () => void
+  onQuickRenew: (days: number) => void
+}) {
+  const sub = teacher.subscription
+  const eff = effectiveSubscriptionStatus(sub)
+  const days = sub ? daysUntilExpiry(sub) : 0
+
+  const statusMeta = (() => {
+    if (eff === "paused") return { label: "已暫停", color: "bg-slate-100 text-slate-700 border-slate-200", bar: "bg-slate-400" }
+    if (eff === "expired") return { label: "已過期", color: "bg-red-100 text-red-700 border-red-200", bar: "bg-red-500" }
+    if (days <= 7) return { label: `${days} 天後到期`, color: "bg-red-100 text-red-700 border-red-200", bar: "bg-red-500" }
+    if (days <= 30) return { label: `${days} 天後到期`, color: "bg-amber-100 text-amber-700 border-amber-200", bar: "bg-amber-500" }
+    return { label: "使用中", color: "bg-emerald-100 text-emerald-700 border-emerald-200", bar: "bg-emerald-500" }
+  })()
+
+  return (
+    <div className="bg-white rounded-xl border border-slate-200 overflow-hidden">
+      <div className={`h-1 ${statusMeta.bar}`} />
+      <div className="p-5">
+        <div className="flex items-start justify-between gap-3 mb-4">
+          <div className="flex items-center gap-3 min-w-0">
+            <div className={`w-11 h-11 rounded-full flex items-center justify-center text-white font-bold flex-shrink-0 ${teacher.template === "A" ? "bg-gradient-to-br from-amber-400 to-yellow-600" : teacher.template === "B" ? "bg-gradient-to-br from-pink-400 to-orange-400" : "bg-gradient-to-br from-slate-700 to-red-500"}`}>
+              {teacher.name.charAt(0)}
+            </div>
+            <div className="min-w-0">
+              <div className="font-bold text-slate-800 truncate">{teacher.name}</div>
+              <div className="text-xs text-slate-500 truncate">{teacher.contact?.email ?? `/${teacher.id}`}</div>
+            </div>
+          </div>
+          <Badge className={`${statusMeta.color} border whitespace-nowrap`}>{statusMeta.label}</Badge>
+        </div>
+
+        {sub ? (
+          <div className="space-y-3 mb-4">
+            <div className="grid grid-cols-2 gap-3 text-sm">
+              <div>
+                <div className="text-xs text-slate-500 mb-1">方案</div>
+                <div className="font-medium text-slate-800">{PLAN_LABELS[sub.plan]}</div>
+              </div>
+              <div>
+                <div className="text-xs text-slate-500 mb-1">期間</div>
+                <div className="font-medium text-slate-800 text-xs">{sub.startDate} → {sub.endDate}</div>
+              </div>
+            </div>
+
+            <div>
+              <div className="text-xs text-slate-500 mb-1.5">可用模板</div>
+              <div className="flex gap-1.5">
+                {ALL_TEMPLATES.map(tpl => {
+                  const unlocked = sub.unlockedTemplates.includes(tpl)
+                  return (
+                    <span
+                      key={tpl}
+                      className={`flex items-center gap-1 px-2 py-1 rounded-md text-xs border ${
+                        unlocked
+                          ? "bg-emerald-50 text-emerald-700 border-emerald-200"
+                          : "bg-slate-50 text-slate-400 border-slate-200"
+                      }`}
+                    >
+                      {unlocked ? <Unlock className="w-3 h-3" /> : <Lock className="w-3 h-3" />}
+                      {tpl} {TEMPLATE_LABELS[tpl]}
+                    </span>
+                  )
+                })}
+              </div>
+            </div>
+
+            {sub.notes && (
+              <div className="text-xs text-slate-500 bg-slate-50 rounded-md p-2 border border-slate-100">
+                {sub.notes}
+              </div>
+            )}
+          </div>
+        ) : (
+          <div className="text-sm text-slate-500 bg-slate-50 rounded-md p-3 mb-4">
+            這位老師尚未設定訂閱資料。
+          </div>
+        )}
+
+        <div className="flex flex-wrap gap-2 pt-3 border-t border-slate-100">
+          <Button size="sm" variant="outline" onClick={onEdit} className="flex-1 min-w-[100px]">
+            <Edit className="w-3.5 h-3.5 mr-1.5" />
+            編輯
+          </Button>
+          {sub && eff !== "paused" && (
+            <Button size="sm" variant="outline" onClick={() => onQuickRenew(30)}>
+              續訂 30 天
+            </Button>
+          )}
+          {sub && eff !== "paused" && (
+            <Button size="sm" variant="outline" onClick={() => onQuickRenew(365)}>
+              續訂 1 年
+            </Button>
+          )}
+          {sub && (
+            <Button size="sm" variant="ghost" onClick={onTogglePause} title={eff === "paused" ? "啟用" : "暫停"}>
+              {eff === "paused" ? <PlayCircle className="w-4 h-4 text-emerald-600" /> : <PauseCircle className="w-4 h-4 text-slate-500" />}
+            </Button>
+          )}
+        </div>
+      </div>
+    </div>
+  )
+}
+
+function SubscriptionEditDialog({
+  teacher,
+  onClose,
+  onSave,
+}: {
+  teacher: Teacher
+  onClose: () => void
+  onSave: (teacher: Teacher, sub: Subscription) => void
+}) {
+  const initial: Subscription = teacher.subscription ?? buildSubscription("trial")
+  const [plan, setPlan] = useState<SubscriptionPlan>(initial.plan)
+  const [startDate, setStartDate] = useState(initial.startDate)
+  const [endDate, setEndDate] = useState(initial.endDate)
+  const [status, setStatus] = useState<"active" | "paused">(initial.status)
+  const [unlocked, setUnlocked] = useState<TemplateId[]>(initial.unlockedTemplates)
+  const [notes, setNotes] = useState(initial.notes ?? "")
+
+  const applyPlanPreset = (next: SubscriptionPlan) => {
+    setPlan(next)
+    const preset = PLAN_PRESETS[next]
+    const newEnd = addDaysISO(startDate, preset.days)
+    setEndDate(newEnd)
+    setUnlocked([...preset.unlockedTemplates])
+  }
+
+  const toggleTemplate = (tpl: TemplateId) => {
+    setUnlocked(prev => prev.includes(tpl) ? prev.filter(t => t !== tpl) : [...prev, tpl].sort() as TemplateId[])
+  }
+
+  const handleSubmit = () => {
+    onSave(teacher, {
+      plan,
+      status,
+      startDate,
+      endDate,
+      unlockedTemplates: unlocked,
+      notes: notes.trim() || undefined,
+    })
+  }
+
+  return (
+    <Dialog open onOpenChange={(open) => !open && onClose()}>
+      <DialogContent className="max-w-lg">
+        <DialogHeader>
+          <DialogTitle>編輯訂閱與權限</DialogTitle>
+          <DialogDescription>
+            設定 {teacher.name} 的方案、服務期限與可用模板
+          </DialogDescription>
+        </DialogHeader>
+
+        <div className="space-y-4 py-2">
+          <div>
+            <Label className="text-sm">方案</Label>
+            <Select value={plan} onValueChange={(v) => applyPlanPreset(v as SubscriptionPlan)}>
+              <SelectTrigger className="mt-1.5">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {ALL_PLANS.map(p => (
+                  <SelectItem key={p} value={p}>
+                    {PLAN_LABELS[p]}（預設 {PLAN_PRESETS[p].days} 天，{PLAN_PRESETS[p].unlockedTemplates.length} 模板）
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <p className="text-xs text-slate-400 mt-1">切換方案會自動帶入預設天數與模板組合，可在下方手動微調。</p>
+          </div>
+
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <Label className="text-sm">起始日</Label>
+              <Input type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)} className="mt-1.5" />
+            </div>
+            <div>
+              <Label className="text-sm">到期日</Label>
+              <Input type="date" value={endDate} onChange={(e) => setEndDate(e.target.value)} className="mt-1.5" />
+            </div>
+          </div>
+
+          <div>
+            <Label className="text-sm">可用模板</Label>
+            <div className="grid grid-cols-3 gap-2 mt-1.5">
+              {ALL_TEMPLATES.map(tpl => {
+                const isOn = unlocked.includes(tpl)
+                return (
+                  <label
+                    key={tpl}
+                    className={`flex items-center gap-2 p-3 rounded-lg border-2 cursor-pointer transition-colors ${
+                      isOn ? "border-red-500 bg-red-50" : "border-slate-200 hover:border-slate-300"
+                    }`}
+                  >
+                    <Checkbox checked={isOn} onCheckedChange={() => toggleTemplate(tpl)} />
+                    <div className="text-sm">
+                      <div className="font-medium text-slate-800">{tpl}</div>
+                      <div className="text-xs text-slate-500">{TEMPLATE_LABELS[tpl]}</div>
+                    </div>
+                  </label>
+                )
+              })}
+            </div>
+            {unlocked.length === 0 && (
+              <p className="text-xs text-red-500 mt-1">至少要解鎖一個模板。</p>
+            )}
+          </div>
+
+          <div>
+            <Label className="text-sm">狀態</Label>
+            <div className="flex gap-2 mt-1.5">
+              <button
+                onClick={() => setStatus("active")}
+                className={`flex-1 py-2 rounded-lg border text-sm font-medium ${
+                  status === "active" ? "bg-emerald-50 border-emerald-300 text-emerald-700" : "bg-white border-slate-200 text-slate-600"
+                }`}
+              >
+                啟用
+              </button>
+              <button
+                onClick={() => setStatus("paused")}
+                className={`flex-1 py-2 rounded-lg border text-sm font-medium ${
+                  status === "paused" ? "bg-slate-100 border-slate-300 text-slate-700" : "bg-white border-slate-200 text-slate-600"
+                }`}
+              >
+                暫停（保留資料但停用服務）
+              </button>
+            </div>
+          </div>
+
+          <div>
+            <Label className="text-sm">內部備註（選填）</Label>
+            <Textarea
+              value={notes}
+              onChange={(e) => setNotes(e.target.value)}
+              placeholder="例：贈送 1 個模板、年度合約等..."
+              rows={2}
+              className="mt-1.5"
+            />
+          </div>
+        </div>
+
+        <DialogFooter>
+          <Button variant="outline" onClick={onClose}>取消</Button>
+          <Button
+            onClick={handleSubmit}
+            disabled={unlocked.length === 0 || !startDate || !endDate}
+            className="bg-red-600 hover:bg-red-700"
+          >
+            儲存
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   )
 }

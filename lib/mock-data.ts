@@ -38,6 +38,36 @@ export interface Teacher {
     phone?: string
     lineQR?: string
   }
+  subscription?: Subscription
+}
+
+// ===== 訂閱與權限 =====
+export type SubscriptionPlan = "trial" | "basic" | "pro" | "flagship"
+export type SubscriptionStatus = "active" | "paused"
+export type TemplateId = "A" | "B" | "C"
+
+export interface Subscription {
+  plan: SubscriptionPlan
+  status: SubscriptionStatus       // 管理員手動暫停／啟用；過期由 endDate 計算
+  startDate: string                // YYYY-MM-DD
+  endDate: string                  // YYYY-MM-DD
+  unlockedTemplates: TemplateId[]  // 個別微調用；預設由方案帶入
+  notes?: string
+}
+
+export const PLAN_LABELS: Record<SubscriptionPlan, string> = {
+  trial: "試用",
+  basic: "基礎",
+  pro: "進階",
+  flagship: "旗艦",
+}
+
+// 方案預設（建立／切換方案時帶入；管理員仍可個別微調）
+export const PLAN_PRESETS: Record<SubscriptionPlan, { days: number; unlockedTemplates: TemplateId[] }> = {
+  trial:    { days: 30,  unlockedTemplates: ["A"] },
+  basic:    { days: 90,  unlockedTemplates: ["A"] },
+  pro:      { days: 180, unlockedTemplates: ["A", "B"] },
+  flagship: { days: 365, unlockedTemplates: ["A", "B", "C"] },
 }
 
 export interface Course {
@@ -380,6 +410,14 @@ export const teacherMonkey: Teacher = {
   contact: {
     email: "monkey@magicrightschool.com",
     phone: "(02) 2683-2613"
+  },
+  subscription: {
+    plan: "flagship",
+    status: "active",
+    startDate: "2025-11-01",
+    endDate: "2026-11-01",
+    unlockedTemplates: ["A", "B", "C"],
+    notes: "首批合作老師，旗艦方案，含全部模板。"
   }
 }
 
@@ -499,6 +537,14 @@ export const teacherPringle: Teacher = {
   contact: {
     email: "pringle@magicrightschool.com",
     phone: "(02) 2683-2613"
+  },
+  subscription: {
+    plan: "pro",
+    status: "active",
+    startDate: "2025-12-05",
+    endDate: "2026-06-04",
+    unlockedTemplates: ["A", "B"],
+    notes: "進階方案即將到期，記得提醒續訂。"
   }
 }
 

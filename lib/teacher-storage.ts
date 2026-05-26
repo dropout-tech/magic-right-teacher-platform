@@ -2,7 +2,14 @@
 // 使 /teacher/{id} 連結可以即時 demo（無後端）。
 "use client"
 
-import { teachers as staticTeachers, type Teacher } from "./mock-data"
+import {
+  PLAN_PRESETS,
+  teachers as staticTeachers,
+  type Subscription,
+  type SubscriptionPlan,
+  type Teacher,
+  type TemplateId,
+} from "./mock-data"
 
 const STORAGE_KEY = "mr-created-teachers-v1"
 
@@ -17,16 +24,31 @@ export function getStoredTeachers(): Teacher[] {
 }
 
 export function getAllTeachers(): Teacher[] {
-  return [...staticTeachers, ...getStoredTeachers()]
+  const stored = getStoredTeachers()
+  const overrides = new Map(stored.map((t) => [t.id, t]))
+  const merged = staticTeachers.map((t) => overrides.get(t.id) ?? t)
+  const staticIds = new Set(staticTeachers.map((t) => t.id))
+  for (const t of stored) if (!staticIds.has(t.id)) merged.push(t)
+  return merged
 }
 
 export function getTeacherById(id: string): Teacher | undefined {
-  const fromStatic = staticTeachers.find((t) => t.id === id)
-  if (fromStatic) return fromStatic
-  return getStoredTeachers().find((t) => t.id === id)
+  // storage 版本優先（管理員可能已對靜態老師做了訂閱微調）
+  const fromStorage = getStoredTeachers().find((t) => t.id === id)
+  if (fromStorage) return fromStorage
+  return staticTeachers.find((t) => t.id === id)
 }
 
 export function addStoredTeacher(teacher: Teacher) {
+  if (typeof window === "undefined") return
+  const list = getStoredTeachers().filter((t) => t.id !== teacher.id)
+  list.push(teacher)
+  window.localStorage.setItem(STORAGE_KEY, JSON.stringify(list))
+}
+
+// 更新已存在的老師（不論在 staticTeachers 或 storage 中皆覆蓋成 storage 版本，
+// 因為靜態 mock 為唯讀，只能用 storage 蓋過去）
+export function upsertTeacher(teacher: Teacher) {
   if (typeof window === "undefined") return
   const list = getStoredTeachers().filter((t) => t.id !== teacher.id)
   list.push(teacher)
@@ -102,6 +124,56 @@ export function slugify(input: string): string {
     || `teacher-${Math.random().toString(36).slice(2, 7)}`
 }
 
+// ===== 訂閱相關工具 =====
+
+function toISODate(d: Date): string {
+  return d.toISOString().slice(0, 10)
+}
+
+export function addDaysISO(startISO: string, days: number): string {
+  const d = new Date(startISO)
+  d.setUTCDate(d.getUTCDate() + days)
+  return toISODate(d)
+}
+
+// 依方案產生一份新的訂閱（起算日預設為今天）
+export function buildSubscription(plan: SubscriptionPlan, startISO?: string): Subscription {
+  const preset = PLAN_PRESETS[plan]
+  const start = startISO ?? toISODate(new Date())
+  return {
+    plan,
+    status: "active",
+    startDate: start,
+    endDate: addDaysISO(start, preset.days),
+    unlockedTemplates: [...preset.unlockedTemplates],
+  }
+}
+
+// 計算距離到期還剩幾天（負數＝已過期）
+export function daysUntilExpiry(sub: Subscription, today: Date = new Date()): number {
+  const end = new Date(sub.endDate + "T23:59:59")
+  return Math.ceil((end.getTime() - today.getTime()) / (1000 * 60 * 60 * 24))
+}
+
+// 訂閱實際生效狀態：active / expired / paused
+export type EffectiveStatus = "active" | "expired" | "paused"
+export function effectiveSubscriptionStatus(sub: Subscription | undefined, today: Date = new Date()): EffectiveStatus {
+  if (!sub) return "expired"
+  if (sub.status === "paused") return "paused"
+  return daysUntilExpiry(sub, today) >= 0 ? "active" : "expired"
+}
+
+// 老師是否仍可使用本服務（訂閱未過期且未暫停）
+export function canUseService(teacher: Teacher, today: Date = new Date()): boolean {
+  return effectiveSubscriptionStatus(teacher.subscription, today) === "active"
+}
+
+// 老師是否可使用某模板（必須在 unlockedTemplates 內，且訂閱有效）
+export function canUseTemplate(teacher: Teacher, template: TemplateId, today: Date = new Date()): boolean {
+  if (!canUseService(teacher, today)) return false
+  return teacher.subscription?.unlockedTemplates.includes(template) ?? false
+}
+
 // 從表單欄位建立預設的 Teacher 樣板，給 demo 用
 export function buildDefaultTeacher(input: {
   id: string
@@ -112,6 +184,9 @@ export function buildDefaultTeacher(input: {
   template?: "A" | "B" | "C"
 }): Teacher {
   const template = input.template ?? "A"
+  const sub = buildSubscription("trial")
+  // 試用方案預設只解鎖選擇的那個模板（而不是 PLAN_PRESETS.trial 寫死的 A）
+  sub.unlockedTemplates = [template]
   return {
     id: input.id,
     name: input.nickname.endsWith("老師") ? input.nickname : `${input.nickname}老師`,
@@ -146,5 +221,6 @@ export function buildDefaultTeacher(input: {
     },
     blockOrder: [1, 2, 3, 4, 5, 6, 7, 8, 9],
     contact: { email: input.email, phone: input.phone },
+    subscription: sub,
   }
 }

@@ -478,12 +478,15 @@ function TemplateSection({ teacher }: { teacher: Teacher }) {
       <div className="bg-white rounded-xl border border-slate-200 p-6 mb-6">
         <div className="flex items-baseline justify-between mb-4">
           <h2 className="text-lg font-bold text-slate-800">選擇模板風格</h2>
-          <p className="text-xs text-slate-500">已選擇 1 個模板，其他模板需額外解鎖</p>
+          <p className="text-xs text-slate-500">
+            已解鎖 {teacher.subscription?.unlockedTemplates.length ?? 1} / 3 個模板，其他模板需升級方案
+          </p>
         </div>
         <div className="grid md:grid-cols-3 gap-4">
           {templates.map((template) => {
             const isSelected = selectedTemplate === template.id
-            const isLocked = !isSelected
+            const isUnlocked = teacher.subscription?.unlockedTemplates.includes(template.id) ?? (template.id === teacher.template)
+            const isLocked = !isUnlocked
             return (
               <button
                 key={template.id}
@@ -496,7 +499,9 @@ function TemplateSection({ teacher }: { teacher: Teacher }) {
                 className={`group relative rounded-xl border-2 overflow-hidden transition-all text-left ${
                   isSelected
                     ? "border-red-500 ring-2 ring-red-200"
-                    : "border-slate-200 cursor-not-allowed"
+                    : isLocked
+                      ? "border-slate-200 cursor-not-allowed"
+                      : "border-slate-200 hover:border-slate-300"
                 }`}
               >
                 <div className={`h-32 bg-gradient-to-br ${template.color} ${isLocked ? "grayscale opacity-50" : ""}`} />
