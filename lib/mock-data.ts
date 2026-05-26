@@ -70,6 +70,14 @@ export const PLAN_PRESETS: Record<SubscriptionPlan, { days: number; unlockedTemp
   flagship: { days: 365, unlockedTemplates: ["A", "B", "C"] },
 }
 
+// 教材中心折扣：訂閱方案享有不同折扣比例（1.00 = 全價）
+export const PLAN_DISCOUNTS: Record<SubscriptionPlan, number> = {
+  trial:    1.00,
+  basic:    0.95,
+  pro:      0.90,
+  flagship: 0.80,
+}
+
 export interface Course {
   id: string
   name: string

@@ -196,28 +196,40 @@ function HeroEditorial({ teacher }: { teacher: Teacher }) {
     <section className="relative bg-white border-b border-black">
       <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-12 md:py-16">
         {/* 上方刊頭 */}
-        <div className="flex items-center justify-between pb-4 border-b border-black mb-12 text-xs uppercase tracking-[0.3em] text-slate-700">
+        <div className="flex items-center justify-between pb-4 border-b border-black mb-14 text-xs uppercase tracking-[0.3em] text-slate-700">
           <span className="font-black">Issue · 老師專訪</span>
-          <span>NO. {teacher.id.toUpperCase()}</span>
+          <span className="font-black tracking-[0.4em]">NO. {teacher.id.toUpperCase()}</span>
           <span className="hidden md:inline">{new Date().getFullYear()} / {String(new Date().getMonth() + 1).padStart(2, "0")}</span>
         </div>
 
-        <div className="grid md:grid-cols-12 gap-8 md:gap-10 items-center">
-          {/* 左側：頭像 + 編號 */}
-          <div className="md:col-span-5 relative">
-            <div className="absolute -top-4 -left-2 text-[10rem] md:text-[14rem] font-black text-red-600 leading-none select-none opacity-90">
-              01
-            </div>
-            <div className="relative w-56 h-72 md:w-72 md:h-96 ml-auto mr-0 md:ml-12 overflow-hidden">
-              {teacher.avatar ? (
-                <Image src={teacher.avatar} alt={teacher.name} fill className="object-cover grayscale contrast-110" />
-              ) : (
-                <div className="w-full h-full bg-gradient-to-br from-slate-200 to-slate-400 flex items-center justify-center text-8xl font-black text-slate-600">
-                  {teacher.name.charAt(0)}
+        <div className="grid md:grid-cols-12 gap-12 md:gap-14 items-center">
+          {/* 左側：雜誌封面風頭像框 */}
+          <div className="md:col-span-5 flex justify-center md:justify-end">
+            <div className="relative w-60 h-80 md:w-72 md:h-[26rem]">
+              {/* 後層紅色色塊（位移做出深度） */}
+              <div className="absolute top-3 left-3 md:top-4 md:left-4 w-full h-full bg-red-600" aria-hidden />
+
+              {/* 頭像框 */}
+              <div className="relative w-full h-full border-[3px] border-black overflow-hidden bg-black">
+                {teacher.avatar ? (
+                  <Image src={teacher.avatar} alt={teacher.name} fill className="object-cover grayscale contrast-110" />
+                ) : (
+                  <div className="w-full h-full bg-black flex items-center justify-center">
+                    <span className="text-[10rem] md:text-[13rem] font-black text-white leading-none select-none">
+                      {teacher.name.charAt(0)}
+                    </span>
+                  </div>
+                )}
+                {/* 對角橫向裁切標籤（雜誌感） */}
+                <div className="absolute bottom-5 -left-1 bg-white border-y-[3px] border-r-[3px] border-black px-4 py-1.5 text-[10px] font-black tracking-[0.3em] uppercase text-black">
+                  Portrait / 2026
                 </div>
-              )}
-              {/* 紅色色塊裝飾 */}
-              <div className="absolute top-0 right-0 w-4 h-full bg-red-600" />
+              </div>
+
+              {/* 左上角紅色印章徽章 */}
+              <div className="absolute -top-3 -left-3 bg-red-600 text-white border-[3px] border-black px-3 py-1 text-[10px] font-black tracking-[0.3em] uppercase shadow-[3px_3px_0_0_rgba(0,0,0,1)]">
+                No.01
+              </div>
             </div>
           </div>
 

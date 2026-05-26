@@ -24,11 +24,15 @@ import {
   LogOut,
   Loader2,
   Building2,
-  MessageCircle
+  MessageCircle,
+  ShoppingBag,
+  Package
 } from "lucide-react"
 import { teacherMonkey, teacherPringle, Teacher } from "@/lib/mock-data"
 import { SectionPreview } from "@/components/section-preview"
 import { LineOaSetup } from "@/components/line-oa-setup"
+import { MaterialCenter } from "@/components/material-center"
+import { MyOrders } from "@/components/my-orders"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
@@ -94,8 +98,10 @@ const sidebarGroups: { title?: string; subtitle?: string; items: SidebarItem[] }
     title: "萊特平台",
     subtitle: "與學院系統互動的功能",
     items: [
-      { id: "course-center", label: "接課中心",     icon: Target,  description: "學院釋出的需求" },
-      { id: "explore",       label: "探索其他才藝", icon: Compass, description: "申請新的培訓"   },
+      { id: "course-center",   label: "接課中心",     icon: Target,       description: "學院釋出的需求" },
+      { id: "explore",         label: "探索其他才藝", icon: Compass,      description: "申請新的培訓"   },
+      { id: "material-center", label: "教材中心",     icon: ShoppingBag,  description: "選購道具、教案、培訓", badge: "新" },
+      { id: "my-orders",       label: "我的訂單",     icon: Package,      description: "已購教材與訂單歷史" },
     ],
   },
   {
@@ -271,6 +277,8 @@ export default function SetupPage() {
           {activeSection === "contact" && <ContactEditorSection teacher={teacher} />}
           {activeSection === "course-center" && <CourseCenterSection teacher={teacher} />}
           {activeSection === "explore" && <ExploreSection />}
+          {activeSection === "material-center" && <MaterialCenter teacher={teacher} onGoToMyOrders={() => setActiveSection("my-orders")} />}
+          {activeSection === "my-orders" && <MyOrders teacher={teacher} onGoToShop={() => setActiveSection("material-center")} />}
           {activeSection === "line-oa" && <LineOaSetup />}
         </main>
       </div>
