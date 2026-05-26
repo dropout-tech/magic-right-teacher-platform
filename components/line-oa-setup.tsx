@@ -931,22 +931,31 @@ function generateContent(data: FormData): {
 
 // ===== Step 5: 申請 LINE OA =====
 function Step5CreateLineOa({ onNext, onPrev }: { onNext: () => void; onPrev: () => void }) {
-  const steps = [
+  const steps: {
+    title: string
+    desc: string
+    icon: LucideIcon
+    stepLabel: string
+    action?: { label: string; url: string }
+  }[] = [
     {
       title: "1. 前往 LINE 官方帳號註冊頁",
       desc: "用你的 LINE 個人帳號登入即可，整個過程是免費的（一般帳號）。",
-      image: "https://images.unsplash.com/photo-1611162616305-c69b3fa7fbe0?w=800&q=80",
+      icon: Users,
+      stepLabel: "STEP 1",
       action: { label: "前往 LINE 註冊頁", url: "https://www.linebiz.com/tw/entry/" },
     },
     {
       title: "2. 填寫你的資訊",
       desc: "依序填入：帳號名稱（你的名字或品牌）、業種類別（選擇「教育」→「老師 / 家教」或對應你教學領域的類別）、業者類型。",
-      image: "https://images.unsplash.com/photo-1486312338219-ce68d2c6f44d?w=800&q=80",
+      icon: Layout,
+      stepLabel: "STEP 2",
     },
     {
       title: "3. 完成驗證並進入後台",
       desc: "驗證信箱後，會自動跳轉到 LINE Official Account Manager 後台。建議把這個網址加到書籤，之後都從這邊管理。",
-      image: "https://images.unsplash.com/photo-1551288049-bebda4e38f71?w=800&q=80",
+      icon: CheckCircle2,
+      stepLabel: "STEP 3",
       action: { label: "開啟 LINE OA Manager", url: "https://manager.line.biz/" },
     },
   ]
@@ -959,14 +968,23 @@ function Step5CreateLineOa({ onNext, onPrev }: { onNext: () => void; onPrev: () 
         desc="如果你已經有 LINE 官方帳號了，可以直接跳到下一步"
       >
         <div className="space-y-4">
-          {steps.map((s, i) => (
+          {steps.map((s, i) => {
+            const Icon = s.icon
+            return (
             <div key={i} className="grid md:grid-cols-[200px_1fr] gap-4 border border-slate-200 rounded-lg overflow-hidden">
-              <div className="bg-slate-100 relative aspect-video md:aspect-auto">
-                <img
-                  src={s.image}
-                  alt={s.title}
-                  className="absolute inset-0 w-full h-full object-cover"
-                />
+              <div
+                className="relative aspect-video md:aspect-auto flex flex-col items-center justify-center gap-2 p-4"
+                style={{
+                  background: `linear-gradient(135deg, ${LINE_GREEN} 0%, ${LINE_GREEN_DARK} 100%)`,
+                }}
+              >
+                <div className="absolute top-2 left-3 text-[10px] font-bold tracking-widest text-white/70">
+                  {s.stepLabel}
+                </div>
+                <div className="w-14 h-14 rounded-full bg-white/15 backdrop-blur-sm flex items-center justify-center">
+                  <Icon className="w-7 h-7 text-white" />
+                </div>
+                <div className="text-white/80 text-[11px]">LINE Official Account</div>
               </div>
               <div className="p-4">
                 <div className="font-bold text-slate-800 mb-1.5">{s.title}</div>
@@ -986,7 +1004,7 @@ function Step5CreateLineOa({ onNext, onPrev }: { onNext: () => void; onPrev: () 
                 )}
               </div>
             </div>
-          ))}
+          )})}
         </div>
 
         <InfoCard>
