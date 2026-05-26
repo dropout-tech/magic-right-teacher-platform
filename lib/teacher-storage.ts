@@ -39,6 +39,55 @@ export function removeStoredTeacher(id: string) {
   window.localStorage.setItem(STORAGE_KEY, JSON.stringify(list))
 }
 
+// ===== 純前端「可分享連結」：把 Teacher 編成 base64url 塞進 query =====
+// 沒有後端的情況下，這讓「產生的連結」真的可以跨裝置分享。
+
+const PAYLOAD_QUERY_KEY = "d"
+
+function bytesToBase64Url(bytes: Uint8Array): string {
+  let bin = ""
+  for (let i = 0; i < bytes.length; i++) bin += String.fromCharCode(bytes[i])
+  return btoa(bin).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "")
+}
+
+function base64UrlToBytes(s: string): Uint8Array {
+  const pad = s.length % 4 === 0 ? "" : "=".repeat(4 - (s.length % 4))
+  const bin = atob(s.replace(/-/g, "+").replace(/_/g, "/") + pad)
+  const out = new Uint8Array(bin.length)
+  for (let i = 0; i < bin.length; i++) out[i] = bin.charCodeAt(i)
+  return out
+}
+
+export function encodeTeacherToPayload(teacher: Teacher): string {
+  const json = JSON.stringify(teacher)
+  const bytes = new TextEncoder().encode(json)
+  return bytesToBase64Url(bytes)
+}
+
+export function decodeTeacherFromPayload(payload: string): Teacher | null {
+  try {
+    const bytes = base64UrlToBytes(payload)
+    const json = new TextDecoder().decode(bytes)
+    const t = JSON.parse(json)
+    // 基本健全性檢查
+    if (!t || typeof t.id !== "string" || typeof t.name !== "string") return null
+    return t as Teacher
+  } catch {
+    return null
+  }
+}
+
+export function buildShareableUrl(origin: string, teacher: Teacher): string {
+  const payload = encodeTeacherToPayload(teacher)
+  return `${origin}/teacher/${encodeURIComponent(teacher.id)}?${PAYLOAD_QUERY_KEY}=${payload}`
+}
+
+export function extractTeacherFromUrl(searchParams: URLSearchParams): Teacher | null {
+  const payload = searchParams.get(PAYLOAD_QUERY_KEY)
+  if (!payload) return null
+  return decodeTeacherFromPayload(payload)
+}
+
 // 工具：把暱稱轉成 URL-safe id
 export function slugify(input: string): string {
   return input

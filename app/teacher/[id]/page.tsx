@@ -3,7 +3,7 @@
 import { use, useEffect, useState } from "react"
 import Link from "next/link"
 import { ArrowLeft, Loader2 } from "lucide-react"
-import { getTeacherById } from "@/lib/teacher-storage"
+import { addStoredTeacher, decodeTeacherFromPayload, getTeacherById } from "@/lib/teacher-storage"
 import type { Teacher } from "@/lib/mock-data"
 import { Button } from "@/components/ui/button"
 import {
@@ -29,6 +29,20 @@ export default function TeacherPage({ params }: TeacherPageProps) {
   useEffect(() => {
     // Next.js may URL-encode dynamic segments — decode defensively
     const decoded = (() => { try { return decodeURIComponent(id) } catch { return id } })()
+
+    // 1) 優先：URL 帶有編碼 payload（純前端「可分享連結」）
+    const payload = new URLSearchParams(window.location.search).get("d")
+    if (payload) {
+      const fromUrl = decodeTeacherFromPayload(payload)
+      if (fromUrl) {
+        // 順手快取到本機 storage，下次點短連結也能開
+        try { addStoredTeacher(fromUrl) } catch {}
+        setTeacher(fromUrl)
+        return
+      }
+    }
+
+    // 2) 再來：靜態 mock 或本機 storage
     const found = getTeacherById(decoded) ?? getTeacherById(id)
     setTeacher(found ?? null)
   }, [id])

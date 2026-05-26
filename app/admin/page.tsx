@@ -19,7 +19,7 @@ import {
   Sparkles
 } from "lucide-react"
 import { teachers as staticTeachers } from "@/lib/mock-data"
-import { addStoredTeacher, buildDefaultTeacher, getAllTeachers, getStoredTeachers, removeStoredTeacher, slugify } from "@/lib/teacher-storage"
+import { addStoredTeacher, buildDefaultTeacher, buildShareableUrl, getAllTeachers, getStoredTeachers, removeStoredTeacher, slugify } from "@/lib/teacher-storage"
 import type { Teacher } from "@/lib/mock-data"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -183,6 +183,7 @@ function CreateTeacherView({ onDone }: { onDone: () => void }) {
   const [generatedData, setGeneratedData] = useState<{
     id: string
     url: string
+    shareUrl: string
     username: string
     password: string
   } | null>(null)
@@ -201,7 +202,8 @@ function CreateTeacherView({ onDone }: { onDone: () => void }) {
     addStoredTeacher(teacher)
     setGeneratedData({
       id,
-      url: `${window.location.origin}/teacher/${id}`,
+      url: `${window.location.origin}/teacher/${encodeURIComponent(id)}`,
+      shareUrl: buildShareableUrl(window.location.origin, teacher),
       username: formData.email,
       password: `MR${Math.random().toString(36).slice(2, 10)}`,
     })
@@ -243,19 +245,41 @@ function CreateTeacherView({ onDone }: { onDone: () => void }) {
 
           <div className="space-y-4">
             <div className="bg-slate-50 rounded-lg p-4">
-              <label className="text-sm text-slate-500 mb-2 block">頁面連結（可直接點開試用）</label>
+              <label className="text-sm text-slate-500 mb-2 block">短連結（本機 demo / 上線後正式使用）</label>
               <div className="flex items-center gap-2">
                 <Input value={generatedData.url} readOnly className="flex-1 bg-white" />
                 <Button size="sm" variant="outline" onClick={() => copyToClipboard(generatedData.url, "url")}>
                   {copied === "url" ? <Check className="w-4 h-4" /> : <Copy className="w-4 h-4" />}
                 </Button>
                 <a href={generatedData.url} target="_blank" rel="noopener noreferrer">
+                  <Button size="sm" variant="outline">
+                    <ExternalLink className="w-4 h-4" />
+                  </Button>
+                </a>
+              </div>
+              <p className="text-xs text-slate-400 mt-2">※ 上線後是正式網址；目前 demo 無後端，僅本瀏覽器可開。</p>
+            </div>
+
+            <div className="bg-gradient-to-br from-red-50 to-orange-50 border border-red-200 rounded-lg p-4">
+              <div className="flex items-center gap-2 mb-2">
+                <Sparkles className="w-4 h-4 text-red-600" />
+                <label className="text-sm font-bold text-red-700">可分享 demo 連結（跨裝置／跨瀏覽器可開）</label>
+              </div>
+              <div className="flex items-center gap-2">
+                <Input value={generatedData.shareUrl} readOnly className="flex-1 bg-white text-xs font-mono" />
+                <Button size="sm" variant="outline" onClick={() => copyToClipboard(generatedData.shareUrl, "share")}>
+                  {copied === "share" ? <Check className="w-4 h-4" /> : <Copy className="w-4 h-4" />}
+                </Button>
+                <a href={generatedData.shareUrl} target="_blank" rel="noopener noreferrer">
                   <Button size="sm" className="bg-red-600 hover:bg-red-700">
                     <ExternalLink className="w-4 h-4 mr-2" />
                     開啟頁面
                   </Button>
                 </a>
               </div>
+              <p className="text-xs text-slate-500 mt-2">
+                ※ 連結內含老師資料（base64 編碼），無需後端即可分享給客戶看。
+              </p>
             </div>
 
             <div className="bg-slate-50 rounded-lg p-4">
