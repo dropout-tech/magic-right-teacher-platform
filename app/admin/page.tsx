@@ -24,6 +24,7 @@ import {
   AlertTriangle,
   PauseCircle,
   PlayCircle,
+  MessageSquare,
 } from "lucide-react"
 import { PLAN_LABELS, PLAN_PRESETS, teachers as staticTeachers, type Subscription, type SubscriptionPlan, type TemplateId } from "@/lib/mock-data"
 import {
@@ -90,12 +91,20 @@ export default function AdminDashboard() {
                 <span className="font-bold text-slate-800">管理後台</span>
               </div>
             </div>
-            <Link href="/teachers">
-              <Button variant="outline" size="sm">
-                <Eye className="w-4 h-4 mr-2" />
-                查看前台
-              </Button>
-            </Link>
+            <div className="flex items-center gap-2">
+              <Link href="/line">
+                <Button size="sm" className="text-white" style={{ backgroundColor: "#06C755" }}>
+                  <MessageSquare className="w-4 h-4 mr-2" />
+                  LINE@ 管理中心
+                </Button>
+              </Link>
+              <Link href="/teachers">
+                <Button variant="outline" size="sm">
+                  <Eye className="w-4 h-4 mr-2" />
+                  查看前台
+                </Button>
+              </Link>
+            </div>
           </div>
         </div>
       </header>

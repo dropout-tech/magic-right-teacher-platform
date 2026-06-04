@@ -3,7 +3,7 @@
 import { useState } from "react"
 import Image from "next/image"
 import Link from "next/link"
-import { Users, LogIn, Settings } from "lucide-react"
+import { Users, LogIn, Settings, MessageCircle } from "lucide-react"
 
 export default function HomePage() {
   const [isHovered, setIsHovered] = useState<string | null>(null)
@@ -70,13 +70,32 @@ export default function HomePage() {
             <div className={`
               flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-medium
               transition-all duration-300 whitespace-nowrap
-              ${isHovered === "admin" 
-                ? "bg-slate-700 text-white shadow-lg scale-105" 
+              ${isHovered === "admin"
+                ? "bg-slate-700 text-white shadow-lg scale-105"
                 : "bg-slate-800/90 text-white shadow-md"
               }
             `}>
               <Settings className="w-4 h-4" />
               後台管理
+            </div>
+          </Link>
+
+          {/* LINE@ 管理中心 */}
+          <Link
+            href="/line"
+            onMouseEnter={() => setIsHovered("line")}
+            onMouseLeave={() => setIsHovered(null)}
+          >
+            <div
+              className={`
+              flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-medium text-white
+              transition-all duration-300 whitespace-nowrap
+              ${isHovered === "line" ? "shadow-lg scale-105" : "shadow-md"}
+            `}
+              style={{ backgroundColor: "#06C755" }}
+            >
+              <MessageCircle className="w-4 h-4" />
+              LINE@ 管理
             </div>
           </Link>
         </div>
