@@ -497,3 +497,142 @@ export const categoryBreakdown: { category: ConvCategory; value: number }[] = [
   { category: "contract",   value: 4 },
   { category: "general",    value: 3 },
 ]
+
+// ===== 打卡回報（長期課程每堂上/下課打卡）=====
+export type SessionStatus = "done" | "today" | "upcoming" | "leave"
+
+export const SESSION_STATUS_META: Record<SessionStatus, { label: string; color: string }> = {
+  done:     { label: "已完成",    color: "bg-emerald-100 text-emerald-700" },
+  today:    { label: "今日待上課", color: "bg-blue-100 text-blue-700" },
+  upcoming: { label: "未開始",    color: "bg-slate-100 text-slate-500" },
+  leave:    { label: "請假順延",  color: "bg-amber-100 text-amber-700" },
+}
+
+export interface CourseSession {
+  no: number
+  date: string          // YYYY-MM-DD
+  weekday: string       // 週一..週日
+  plannedStart: string  // "15:30"
+  plannedEnd: string    // "17:00"
+  checkIn?: string      // 實際上課打卡 "15:28"
+  checkOut?: string     // 實際下課打卡 "17:03"
+  status: SessionStatus
+  note?: string
+}
+
+export interface OngoingCourse {
+  id: string
+  dispatchId?: string
+  organization: string
+  talent: string
+  teacherId: string
+  teacherName: string
+  teacherGrad: string   // 頭像漸層 class
+  location: string
+  scheduleLabel: string
+  totalSessions: number
+  ratePerSession: number
+  sessions: CourseSession[]
+}
+
+const TODAY_ISO = "2026-06-05"
+const WEEKDAYS = ["週日", "週一", "週二", "週三", "週四", "週五", "週六"]
+
+function isoAddDays(iso: string, days: number): string {
+  const [y, m, d] = iso.split("-").map(Number)
+  const dt = new Date(Date.UTC(y, m - 1, d))
+  dt.setUTCDate(dt.getUTCDate() + days)
+  return dt.toISOString().slice(0, 10)
+}
+function weekdayOf(iso: string): string {
+  const [y, m, d] = iso.split("-").map(Number)
+  return WEEKDAYS[new Date(Date.UTC(y, m - 1, d)).getUTCDay()]
+}
+function toMinutes(t: string): number {
+  const [h, m] = t.split(":").map(Number)
+  return h * 60 + m
+}
+function fromMinutes(v: number): string {
+  return `${String(Math.floor(v / 60)).padStart(2, "0")}:${String(v % 60).padStart(2, "0")}`
+}
+export function sessionHours(s: { plannedStart: string; plannedEnd: string; checkIn?: string; checkOut?: string }): number {
+  const start = s.checkIn ?? s.plannedStart
+  const end = s.checkOut ?? s.plannedEnd
+  return Math.round(((toMinutes(end) - toMinutes(start)) / 60) * 10) / 10
+}
+
+// 過去場次的打卡時間微調（固定值，避免 SSR/CSR 不一致）
+const CHECKIN_OFFSET = [-3, -1, -2, 0, -4, -1, -2, -1, -3, -2, -1, -2]
+const CHECKOUT_OFFSET = [2, 4, 1, 3, 2, 5, 1, 2, 3, 1, 2, 4]
+
+function buildSessions(total: number, pastCount: number, planStart: string, planEnd: string, leaveAt?: number): CourseSession[] {
+  return Array.from({ length: total }, (_, i) => {
+    const date = isoAddDays(TODAY_ISO, (i - pastCount) * 7)
+    const base = { no: i + 1, date, weekday: weekdayOf(date), plannedStart: planStart, plannedEnd: planEnd }
+    if (i < pastCount) {
+      if (leaveAt === i) return { ...base, status: "leave" as SessionStatus, note: "學生校外教學，順延補課" }
+      return {
+        ...base,
+        checkIn: fromMinutes(toMinutes(planStart) + CHECKIN_OFFSET[i % CHECKIN_OFFSET.length]),
+        checkOut: fromMinutes(toMinutes(planEnd) + CHECKOUT_OFFSET[i % CHECKOUT_OFFSET.length]),
+        status: "done" as SessionStatus,
+      }
+    }
+    if (i === pastCount) return { ...base, status: "today" as SessionStatus }
+    return { ...base, status: "upcoming" as SessionStatus }
+  })
+}
+
+export const ongoingCourses: OngoingCourse[] = [
+  {
+    id: "oc1",
+    dispatchId: "d1",
+    organization: "三重國小・魔術社團",
+    talent: "魔術",
+    teacherId: "monkey",
+    teacherName: "猴子老師",
+    teacherGrad: "from-amber-400 to-yellow-600",
+    location: "新北市三重區",
+    scheduleLabel: `每${weekdayOf(TODAY_ISO)} 15:30–17:00`,
+    totalSessions: 16,
+    ratePerSession: 1000,
+    sessions: buildSessions(16, 9, "15:30", "17:00", 4),
+  },
+  {
+    id: "oc2",
+    organization: "板橋私立幼兒園・氣球造型",
+    talent: "氣球",
+    teacherId: "axuan",
+    teacherName: "阿軒老師",
+    teacherGrad: "from-violet-400 to-purple-500",
+    location: "新北市板橋區",
+    scheduleLabel: `每${weekdayOf(TODAY_ISO)} 10:00–11:00`,
+    totalSessions: 12,
+    ratePerSession: 800,
+    sessions: buildSessions(12, 4, "10:00", "11:00"),
+  },
+]
+
+// 一堂課若有完整上下課打卡，或已標記 done，即視為完成
+export function isSessionDone(s: CourseSession): boolean {
+  return s.status === "done" || (!!s.checkIn && !!s.checkOut)
+}
+
+export function courseSummary(c: OngoingCourse) {
+  const done = c.sessions.filter(isSessionDone).length
+  const leave = c.sessions.filter(s => s.status === "leave").length
+  const doneHours = c.sessions.filter(isSessionDone).reduce((sum, s) => sum + sessionHours(s), 0)
+  return {
+    done,
+    leave,
+    total: c.totalSessions,
+    doneHours: Math.round(doneHours * 10) / 10,
+    earned: done * c.ratePerSession,
+    attendance: done + leave > 0 ? Math.round((done / (done + leave)) * 100) : 100,
+  }
+}
+
+export function nowClock(): string {
+  const d = new Date()
+  return `${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`
+}

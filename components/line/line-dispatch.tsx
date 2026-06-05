@@ -20,10 +20,12 @@ import {
   dispatchRequests,
   lineTeachers,
   matchTeachers,
+  ongoingCourses,
   type DispatchReply,
   type DispatchReplyStatus,
 } from "@/lib/line-data"
 import { LinePhone, ChatBubble, DispatchCardBubble, SystemNote } from "@/components/line/line-phone"
+import { LineCheckin } from "@/components/line/line-checkin"
 
 function nowClock() {
   const d = new Date()
@@ -33,6 +35,41 @@ function nowClock() {
 const teacherById = (id: string) => lineTeachers.find(t => t.id === id)!
 
 export function LineDispatch() {
+  const [tab, setTab] = useState<"matching" | "checkin">("matching")
+  const todayCount = ongoingCourses.filter(c => c.sessions.some(s => s.status === "today")).length
+  return (
+    <div className="space-y-4">
+      <div>
+        <h1 className="text-2xl font-bold text-slate-800">派課中心</h1>
+        <p className="text-sm text-slate-500 mt-1">
+          {tab === "matching"
+            ? "有課程需求時，系統自動篩選出符合才藝、地區且開放接課的老師，一鍵推播到他們的 LINE，老師點一下就能回覆。"
+            : "長期課程每堂課的上課／下課打卡，老師在 LINE 一鍵回報，行政即時掌握出勤與鐘點，月底自動帶入請款。"}
+        </p>
+      </div>
+      <div className="flex gap-6 border-b border-slate-200">
+        <TabBtn active={tab === "matching"} onClick={() => setTab("matching")} label="派課媒合" />
+        <TabBtn active={tab === "checkin"} onClick={() => setTab("checkin")} label="打卡回報" badge={todayCount > 0 ? `今日 ${todayCount} 堂` : undefined} />
+      </div>
+      {tab === "matching" ? <MatchingView /> : <LineCheckin />}
+    </div>
+  )
+}
+
+function TabBtn({ active, onClick, label, badge }: { active: boolean; onClick: () => void; label: string; badge?: string }) {
+  return (
+    <button
+      onClick={onClick}
+      className={`relative -mb-px pb-2.5 pt-1 text-sm font-medium flex items-center gap-2 border-b-2 transition-colors ${active ? "text-slate-900" : "text-slate-400 hover:text-slate-600"}`}
+      style={{ borderColor: active ? "#06C755" : "transparent" }}
+    >
+      {label}
+      {badge && <span className="text-[11px] bg-blue-100 text-blue-600 rounded-full px-1.5 py-0.5">{badge}</span>}
+    </button>
+  )
+}
+
+function MatchingView() {
   const [selectedId, setSelectedId] = useState(dispatchRequests[0].id)
   const [replies, setReplies] = useState<Record<string, DispatchReply[]>>(() => ({ ...seedReplies }))
   const [dispatched, setDispatched] = useState<Record<string, boolean>>(() => ({ d1: true }))
@@ -83,13 +120,6 @@ export function LineDispatch() {
 
   return (
     <div className="space-y-4">
-      <div>
-        <h1 className="text-2xl font-bold text-slate-800">派課中心</h1>
-        <p className="text-sm text-slate-500 mt-1">
-          有課程需求時，系統自動篩選出符合才藝、地區且開放接課的老師，一鍵推播到他們的 LINE，老師點一下就能回覆 —— 不用再一個一個問。
-        </p>
-      </div>
-
       <div className="grid grid-cols-1 lg:grid-cols-[320px_1fr] gap-4">
         {/* 左：需求清單 */}
         <div className="space-y-3">

@@ -150,6 +150,62 @@ export function DispatchCardBubble({
   )
 }
 
+// 打卡卡片（老師端在 LINE 收到的每堂上/下課打卡）
+export function CheckinCardBubble({
+  organization,
+  sessionNo,
+  planned,
+  checkIn,
+  checkOut,
+  onCheckIn,
+  onCheckOut,
+}: {
+  organization: string
+  sessionNo: number
+  planned: string
+  checkIn?: string
+  checkOut?: string
+  onCheckIn?: () => void
+  onCheckOut?: () => void
+}) {
+  return (
+    <div className="max-w-[88%] bg-white rounded-2xl rounded-bl-sm overflow-hidden shadow-sm">
+      <div className="px-3 py-2 text-white text-[11px] font-bold" style={{ backgroundColor: LINE_GREEN }}>
+        📍 上課打卡回報
+      </div>
+      <div className="p-3 space-y-1.5 text-[11px] text-slate-700">
+        <div className="font-bold text-slate-900 text-[12px]">{organization}</div>
+        <div className="text-slate-500">第 {sessionNo} 堂・計畫 {planned}</div>
+        <div className="space-y-1 pt-1 border-t border-slate-100">
+          <div className="flex items-center justify-between">
+            <span>上課</span>
+            {checkIn ? <span className="text-emerald-600 font-medium">✓ {checkIn}</span> : <span className="text-slate-400">尚未打卡</span>}
+          </div>
+          <div className="flex items-center justify-between">
+            <span>下課</span>
+            {checkOut ? <span className="text-emerald-600 font-medium">✓ {checkOut}</span> : <span className="text-slate-400">—</span>}
+          </div>
+        </div>
+      </div>
+      <div className="border-t border-slate-100 text-[12px] font-bold">
+        {!checkIn ? (
+          <button onClick={onCheckIn} className="w-full py-2 hover:bg-emerald-50" style={{ color: LINE_GREEN_DARK }}>
+            🟢 上課打卡
+          </button>
+        ) : !checkOut ? (
+          <button onClick={onCheckOut} className="w-full py-2 text-rose-600 hover:bg-rose-50">
+            🔴 下課打卡
+          </button>
+        ) : (
+          <div className="py-2 text-center text-emerald-600 flex items-center justify-center gap-1">
+            <Check className="w-3.5 h-3.5" /> 本堂已完成回報
+          </div>
+        )}
+      </div>
+    </div>
+  )
+}
+
 const MENU_ITEMS: { label: string; icon: LucideIcon }[] = [
   { label: "預約試聽", icon: Calendar },
   { label: "課表查詢", icon: Clock },
