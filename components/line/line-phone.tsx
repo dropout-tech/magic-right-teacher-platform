@@ -1,8 +1,14 @@
 "use client"
 
 import type { ReactNode } from "react"
-import { Calendar, Clock, Wallet, PartyPopper, Phone, Megaphone, Check } from "lucide-react"
+import { Calendar, Clock, Wallet, PartyPopper, Phone, Megaphone, Check, Camera, ImageIcon } from "lucide-react"
 import type { LucideIcon } from "lucide-react"
+import {
+  SALARY_STATUS_META,
+  statementBase,
+  statementGross,
+  type SalaryStatement,
+} from "@/lib/line-data"
 
 export const LINE_GREEN = "#06C755"
 export const LINE_GREEN_DARK = "#04A647"
@@ -195,6 +201,205 @@ export function CheckinCardBubble({
         ) : !checkOut ? (
           <button onClick={onCheckOut} className="w-full py-2 text-rose-600 hover:bg-rose-50">
             🔴 下課打卡
+          </button>
+        ) : (
+          <div className="py-2 text-center text-emerald-600 flex items-center justify-center gap-1">
+            <Check className="w-3.5 h-3.5" /> 本堂已完成回報
+          </div>
+        )}
+      </div>
+    </div>
+  )
+}
+
+// 薪資卡片（老師端在 LINE 查詢鐘點時收到的 flex message 樣式）
+export function SalaryCardBubble({ statement }: { statement: SalaryStatement }) {
+  const base = statementBase(statement)
+  const gross = statementGross(statement)
+  const meta = SALARY_STATUS_META[statement.status]
+  return (
+    <div className="max-w-[88%] bg-white rounded-2xl rounded-bl-sm overflow-hidden shadow-sm">
+      <div className="px-3 py-2 text-white text-[11px] font-bold flex items-center justify-between" style={{ backgroundColor: LINE_GREEN }}>
+        <span>💰 {statement.monthLabel} 鐘點試算</span>
+        <span className="bg-white/25 rounded px-1.5 py-0.5 text-[10px]">{meta.label}</span>
+      </div>
+      <div className="p-3 space-y-1.5 text-[11px] text-slate-700">
+        {statement.lines.map((l, i) => (
+          <div key={i} className="flex items-center justify-between gap-2">
+            <span className="truncate">
+              <span className="text-slate-400 mr-1">{l.talent}</span>
+              {l.organization}
+            </span>
+            <span className="whitespace-nowrap text-slate-500">{l.sessions} 堂</span>
+            <span className="whitespace-nowrap font-medium text-slate-800">${l.subtotal.toLocaleString()}</span>
+          </div>
+        ))}
+        <div className="flex items-center justify-between pt-1.5 border-t border-slate-100 text-slate-500">
+          <span>鐘點小計</span>
+          <span>${base.toLocaleString()}</span>
+        </div>
+        {statement.adjustments.map((a, i) => (
+          <div key={i} className="flex items-center justify-between text-slate-500">
+            <span>{a.label}</span>
+            <span className={a.amount < 0 ? "text-rose-500" : "text-emerald-600"}>
+              {a.amount < 0 ? "-" : "+"}${Math.abs(a.amount).toLocaleString()}
+            </span>
+          </div>
+        ))}
+        <div className="flex items-center justify-between pt-1.5 border-t border-slate-100">
+          <span className="font-bold text-slate-900 text-[12px]">本月合計</span>
+          <span className="font-bold text-[13px]" style={{ color: LINE_GREEN_DARK }}>${gross.toLocaleString()}</span>
+        </div>
+        <div className="text-[10px] text-slate-400 pt-0.5">
+          {statement.status === "paid" ? `已於 ${statement.payDate} 入帳` : `預定 ${statement.payDate} 入帳`}
+        </div>
+      </div>
+    </div>
+  )
+}
+
+// LINE 快速回覆列（聊天室底部可點選的膠囊鈕）
+export function QuickReplyChips({ chips, onPick }: { chips: string[]; onPick: (chip: string) => void }) {
+  return (
+    <div className="flex gap-1.5 overflow-x-auto pb-0.5 -mx-1 px-1">
+      {chips.map(chip => (
+        <button
+          key={chip}
+          onClick={() => onPick(chip)}
+          className="flex-shrink-0 bg-white/90 rounded-full px-3 py-1 text-[11px] font-medium shadow-sm whitespace-nowrap border"
+          style={{ color: LINE_GREEN_DARK, borderColor: LINE_GREEN }}
+        >
+          {chip}
+        </button>
+      ))}
+    </div>
+  )
+}
+
+// 課程類型選擇框（官方帳號於上課當天請老師確認課別）
+export function ChoiceCardBubble({
+  heading = "🧾 請選擇今日課程類型",
+  title,
+  options,
+  picked,
+  onPick,
+}: {
+  heading?: string
+  title?: string
+  options: { key: string; label: string; sub?: string }[]
+  picked?: string | null
+  onPick?: (key: string) => void
+}) {
+  return (
+    <div className="max-w-[88%] bg-white rounded-2xl rounded-bl-sm overflow-hidden shadow-sm">
+      <div className="px-3 py-2 text-white text-[11px] font-bold" style={{ backgroundColor: LINE_GREEN }}>
+        {heading}
+      </div>
+      <div className="p-2 space-y-1">
+        {title && <div className="px-1 pb-1 text-[11px] text-slate-500">{title}</div>}
+        {options.map((o, i) => {
+          const active = picked === o.key
+          return (
+            <button
+              key={o.key}
+              onClick={() => onPick?.(o.key)}
+              disabled={!!picked}
+              className={`w-full flex items-center gap-2 rounded-lg px-2.5 py-2 text-left text-[11px] border transition-colors ${
+                active ? "border-emerald-400 bg-emerald-50" : picked ? "border-transparent opacity-40" : "border-slate-200 hover:bg-slate-50"
+              }`}
+            >
+              <span
+                className="w-5 h-5 rounded-full flex items-center justify-center text-white text-[10px] font-bold flex-shrink-0"
+                style={{ backgroundColor: active ? LINE_GREEN : "#cbd5e1" }}
+              >
+                {i + 1}
+              </span>
+              <span className="flex-1 min-w-0">
+                <span className="font-medium text-slate-800">{o.label}</span>
+                {o.sub && <span className="block text-[10px] text-slate-400">{o.sub}</span>}
+              </span>
+              {active && <Check className="w-3.5 h-3.5 text-emerald-600 flex-shrink-0" />}
+            </button>
+          )
+        })}
+      </div>
+    </div>
+  )
+}
+
+// 抵達打卡卡片：先上傳抵達現場照片，再打卡上課，下課後打卡下班
+export function PhotoCheckinCard({
+  organization,
+  sessionNo,
+  planned,
+  courseTypeLabel,
+  photo,
+  checkIn,
+  checkOut,
+  onUploadPhoto,
+  onCheckIn,
+  onCheckOut,
+}: {
+  organization: string
+  sessionNo: number
+  planned: string
+  courseTypeLabel: string
+  photo?: boolean
+  checkIn?: string
+  checkOut?: string
+  onUploadPhoto?: () => void
+  onCheckIn?: () => void
+  onCheckOut?: () => void
+}) {
+  return (
+    <div className="max-w-[88%] bg-white rounded-2xl rounded-bl-sm overflow-hidden shadow-sm">
+      <div className="px-3 py-2 text-white text-[11px] font-bold flex items-center justify-between" style={{ backgroundColor: LINE_GREEN }}>
+        <span>📍 上課打卡</span>
+        <span className="bg-white/25 rounded px-1.5 py-0.5 text-[10px]">{courseTypeLabel}</span>
+      </div>
+      <div className="p-3 space-y-2 text-[11px] text-slate-700">
+        <div className="font-bold text-slate-900 text-[12px]">{organization}</div>
+        <div className="text-slate-500">第 {sessionNo} 堂・計畫 {planned}</div>
+
+        {photo ? (
+          <div className="rounded-lg overflow-hidden border border-slate-100">
+            <div className="h-20 bg-gradient-to-br from-slate-300 to-slate-400 flex items-center justify-center relative">
+              <ImageIcon className="w-6 h-6 text-white/80" />
+              <span className="absolute bottom-1 left-1.5 bg-black/45 text-white text-[9px] rounded px-1.5 py-0.5">
+                📍 抵達現場{checkIn ? ` ${checkIn}` : ""}
+              </span>
+            </div>
+          </div>
+        ) : !checkOut ? (
+          <button
+            onClick={onUploadPhoto}
+            className="w-full flex items-center justify-center gap-1.5 rounded-lg border-2 border-dashed border-slate-200 py-3 text-slate-500 hover:bg-slate-50"
+          >
+            <Camera className="w-4 h-4" /> 上傳抵達現場照片
+          </button>
+        ) : null}
+
+        <div className="space-y-1 pt-1 border-t border-slate-100">
+          <div className="flex items-center justify-between">
+            <span>上課</span>
+            {checkIn ? <span className="text-emerald-600 font-medium">✓ {checkIn}</span> : <span className="text-slate-400">尚未打卡</span>}
+          </div>
+          <div className="flex items-center justify-between">
+            <span>下課</span>
+            {checkOut ? <span className="text-emerald-600 font-medium">✓ {checkOut}</span> : <span className="text-slate-400">—</span>}
+          </div>
+        </div>
+      </div>
+      <div className="border-t border-slate-100 text-[12px] font-bold">
+        {!photo ? (
+          <div className="py-2 text-center text-slate-300">請先上傳抵達照片</div>
+        ) : !checkIn ? (
+          <button onClick={onCheckIn} className="w-full py-2 hover:bg-emerald-50" style={{ color: LINE_GREEN_DARK }}>
+            🟢 上課打卡
+          </button>
+        ) : !checkOut ? (
+          <button onClick={onCheckOut} className="w-full py-2 text-rose-600 hover:bg-rose-50">
+            🔴 下課打卡下班
           </button>
         ) : (
           <div className="py-2 text-center text-emerald-600 flex items-center justify-center gap-1">

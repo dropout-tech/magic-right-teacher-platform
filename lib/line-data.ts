@@ -264,18 +264,28 @@ export const lineTeachers: LineTeacher[] = [
 ]
 
 // ===== 派課中心 =====
+export type Region = "北區" | "中區" | "南區"
+export const ALL_REGIONS: Region[] = ["北區", "中區", "南區"]
+// 所有才藝標籤（由老師名冊自動彙整，去重排序）
+export const ALL_TALENTS: string[] = Array.from(
+  new Set(lineTeachers.flatMap(t => t.talents)),
+).sort()
+
 export interface DispatchRequest {
   id: string
   organization: string
   courseType: string
   talent: string
-  region: "北區" | "中區" | "南區"
+  region: Region
   location: string
   timeSlot: string
   estimatedSessions: number
   rate: string
   deadline: string
   status: "matching" | "dispatched" | "filled"
+  // 推播對象設定（新增派課需求時使用；舊資料留空則回退為單一 talent/region）
+  targetTalents?: string[]
+  targetRegions?: Region[]
 }
 
 export type DispatchReplyStatus = "accepted" | "declined" | "read" | "sent"
@@ -358,15 +368,25 @@ export const dispatchReplies: Record<string, DispatchReply[]> = {
   ],
 }
 
-// 依案件自動配對候選老師（符合才藝 + 地區，且非暫停接課）
-export function matchTeachers(req: DispatchRequest): LineTeacher[] {
+// 依「才藝標籤 +（不限）地區」配對候選老師：已綁定、非暫停接課，
+// 才藝命中任一標籤，且符合所選地區（氣球等表演類可跨區、未選地區視為不限）。
+export function previewMatch(talents: string[], regions: Region[]): LineTeacher[] {
+  if (talents.length === 0) return []
+  const crossRegion = talents.includes("氣球")
   return lineTeachers.filter(
     t =>
       t.lineBound &&
       t.courseStatus !== "closed" &&
-      t.talents.includes(req.talent) &&
-      (t.region === req.region || req.talent === "氣球"), // 表演類可跨區支援
+      talents.some(tal => t.talents.includes(tal)) &&
+      (crossRegion || regions.length === 0 || regions.includes(t.region)),
   )
+}
+
+// 依案件自動配對候選老師（沿用案件上的推播對象設定，未設定則回退單一 talent/region）
+export function matchTeachers(req: DispatchRequest): LineTeacher[] {
+  const talents = req.targetTalents?.length ? req.targetTalents : [req.talent]
+  const regions = req.targetRegions?.length ? req.targetRegions : [req.region]
+  return previewMatch(talents, regions)
 }
 
 // ===== 群發中心 =====
@@ -636,3 +656,123 @@ export function nowClock(): string {
   const d = new Date()
   return `${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`
 }
+
+// ===== 薪資查詢（老師在 LINE 自助查詢鐘點）=====
+// 鐘點以打卡完成堂數 × 每堂鐘點計算，與打卡中心同一份 ongoingCourses 串接。
+export type SalaryStatus = "estimating" | "confirmed" | "paid"
+
+export const SALARY_STATUS_META: Record<SalaryStatus, { label: string; color: string }> = {
+  estimating: { label: "試算中",     color: "bg-amber-100 text-amber-700" },
+  confirmed:  { label: "已確認待入帳", color: "bg-blue-100 text-blue-700" },
+  paid:       { label: "已入帳",     color: "bg-emerald-100 text-emerald-700" },
+}
+
+export interface SalaryLine {
+  organization: string
+  talent: string
+  sessions: number        // 本月完成（打卡）堂數
+  hours: number           // 累計時數
+  ratePerSession: number
+  subtotal: number
+}
+
+// 調整項：加項為正、扣項為負（如交通補助、代墊教材、請假扣款）
+export interface SalaryAdjustment {
+  label: string
+  amount: number
+}
+
+export interface SalaryStatement {
+  id: string
+  teacherId: string
+  month: string           // "2026-06"
+  monthLabel: string      // "2026 年 6 月"
+  lines: SalaryLine[]
+  adjustments: SalaryAdjustment[]
+  payDate: string         // 預定入帳日
+  status: SalaryStatus
+}
+
+export function statementBase(s: SalaryStatement): number {
+  return s.lines.reduce((sum, l) => sum + l.subtotal, 0)
+}
+export function statementGross(s: SalaryStatement): number {
+  return statementBase(s) + s.adjustments.reduce((sum, a) => sum + a.amount, 0)
+}
+
+// 由進行中課程的打卡進度，組出本月（2026-06）薪資試算
+function buildCurrentStatements(): SalaryStatement[] {
+  const byTeacher: Record<string, SalaryLine[]> = {}
+  for (const c of ongoingCourses) {
+    const sum = courseSummary(c)
+    if (sum.done === 0) continue
+    ;(byTeacher[c.teacherId] ??= []).push({
+      organization: c.organization,
+      talent: c.talent,
+      sessions: sum.done,
+      hours: sum.doneHours,
+      ratePerSession: c.ratePerSession,
+      subtotal: sum.earned,
+    })
+  }
+  const adjustments: Record<string, SalaryAdjustment[]> = {
+    monkey: [{ label: "三重交通補助", amount: 600 }],
+    axuan:  [{ label: "代墊氣球教材", amount: 450 }],
+  }
+  return Object.entries(byTeacher).map(([teacherId, lines]) => ({
+    id: `sal-${teacherId}-2026-06`,
+    teacherId,
+    month: "2026-06",
+    monthLabel: "2026 年 6 月",
+    lines,
+    adjustments: adjustments[teacherId] ?? [],
+    payDate: "2026-06-28",
+    status: "estimating" as SalaryStatus,
+  }))
+}
+
+// 過往月份（已入帳）作為歷史紀錄
+const salaryHistory: SalaryStatement[] = [
+  {
+    id: "sal-monkey-2026-05",
+    teacherId: "monkey",
+    month: "2026-05",
+    monthLabel: "2026 年 5 月",
+    lines: [
+      { organization: "三重國小・魔術社團", talent: "魔術", sessions: 4, hours: 6, ratePerSession: 1000, subtotal: 4000 },
+      { organization: "大同社區・親子桌遊", talent: "桌遊", sessions: 3, hours: 4.5, ratePerSession: 900, subtotal: 2700 },
+    ],
+    adjustments: [{ label: "三重交通補助", amount: 600 }],
+    payDate: "2026-05-28",
+    status: "paid",
+  },
+  {
+    id: "sal-axuan-2026-05",
+    teacherId: "axuan",
+    month: "2026-05",
+    monthLabel: "2026 年 5 月",
+    lines: [
+      { organization: "板橋私立幼兒園・氣球造型", talent: "氣球", sessions: 4, hours: 4, ratePerSession: 800, subtotal: 3200 },
+    ],
+    adjustments: [],
+    payDate: "2026-05-28",
+    status: "paid",
+  },
+]
+
+export const salaryStatements: SalaryStatement[] = [
+  ...buildCurrentStatements(),
+  ...salaryHistory,
+]
+
+// 取某老師全部薪資單，依月份新到舊
+export function statementsOf(teacherId: string): SalaryStatement[] {
+  return salaryStatements
+    .filter(s => s.teacherId === teacherId)
+    .sort((a, b) => (a.month < b.month ? 1 : -1))
+}
+
+// 有薪資資料的老師（薪資查詢清單用）
+export const salaryTeacherIds: string[] = Array.from(
+  new Set(salaryStatements.map(s => s.teacherId)),
+)

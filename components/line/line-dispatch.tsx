@@ -10,10 +10,15 @@ import {
   Sparkles,
   Users,
   Check,
+  Plus,
+  X,
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
+import { Input } from "@/components/ui/input"
 import {
+  ALL_REGIONS,
+  ALL_TALENTS,
   COURSE_STATUS_META,
   DISPATCH_REPLY_META,
   dispatchReplies as seedReplies,
@@ -21,8 +26,11 @@ import {
   lineTeachers,
   matchTeachers,
   ongoingCourses,
+  previewMatch,
   type DispatchReply,
   type DispatchReplyStatus,
+  type DispatchRequest,
+  type Region,
 } from "@/lib/line-data"
 import { LinePhone, ChatBubble, DispatchCardBubble, SystemNote } from "@/components/line/line-phone"
 import { LineCheckin } from "@/components/line/line-checkin"
@@ -70,11 +78,19 @@ function TabBtn({ active, onClick, label, badge }: { active: boolean; onClick: (
 }
 
 function MatchingView() {
+  const [requests, setRequests] = useState<DispatchRequest[]>(dispatchRequests)
   const [selectedId, setSelectedId] = useState(dispatchRequests[0].id)
   const [replies, setReplies] = useState<Record<string, DispatchReply[]>>(() => ({ ...seedReplies }))
   const [dispatched, setDispatched] = useState<Record<string, boolean>>(() => ({ d1: true }))
+  const [showForm, setShowForm] = useState(false)
 
-  const req = dispatchRequests.find(r => r.id === selectedId)!
+  const addRequest = (r: DispatchRequest) => {
+    setRequests(prev => [r, ...prev])
+    setSelectedId(r.id)
+    setShowForm(false)
+  }
+
+  const req = requests.find(r => r.id === selectedId)!
   const matched = useMemo(() => matchTeachers(req), [req])
   const reqReplies = replies[selectedId] ?? []
   const isDispatched = !!dispatched[selectedId]
@@ -123,7 +139,13 @@ function MatchingView() {
       <div className="grid grid-cols-1 lg:grid-cols-[320px_1fr] gap-4">
         {/* 左：需求清單 */}
         <div className="space-y-3">
-          {dispatchRequests.map(r => {
+          <button
+            onClick={() => setShowForm(true)}
+            className="w-full flex items-center justify-center gap-1.5 rounded-xl border-2 border-dashed border-emerald-300 text-emerald-700 hover:bg-emerald-50/60 py-3 text-sm font-medium transition-colors"
+          >
+            <Plus className="w-4 h-4" /> 新增派課需求
+          </button>
+          {requests.map(r => {
             const m = matchTeachers(r)
             const rr = replies[r.id] ?? []
             const acc = rr.filter(x => x.status === "accepted").length
@@ -242,7 +264,159 @@ function MatchingView() {
           </div>
         </div>
       </div>
+
+      {showForm && <NewRequestModal onClose={() => setShowForm(false)} onCreate={addRequest} />}
     </div>
+  )
+}
+
+// 新增派課需求：推播對象依「才藝標籤 + 地區」設定，並即時預覽符合老師
+function NewRequestModal({ onClose, onCreate }: { onClose: () => void; onCreate: (r: DispatchRequest) => void }) {
+  const [organization, setOrganization] = useState("")
+  const [courseType, setCourseType] = useState("社團課程")
+  const [talents, setTalents] = useState<string[]>([])
+  const [regions, setRegions] = useState<Region[]>([])
+  const [location, setLocation] = useState("")
+  const [timeSlot, setTimeSlot] = useState("")
+  const [sessions, setSessions] = useState("")
+  const [rate, setRate] = useState("")
+  const [deadline, setDeadline] = useState("")
+
+  const matched = useMemo(() => previewMatch(talents, regions), [talents, regions])
+  const canCreate = organization.trim() && talents.length > 0
+
+  const toggleTalent = (t: string) =>
+    setTalents(prev => (prev.includes(t) ? prev.filter(x => x !== t) : [...prev, t]))
+  const toggleRegion = (r: Region) =>
+    setRegions(prev => (prev.includes(r) ? prev.filter(x => x !== r) : [...prev, r]))
+
+  const submit = () => {
+    if (!canCreate) return
+    const n = Number(sessions) || 0
+    onCreate({
+      id: `d-${Date.now()}`,
+      organization: organization.trim(),
+      courseType,
+      talent: talents[0],
+      region: regions[0] ?? "北區",
+      location: location.trim() || "—",
+      timeSlot: timeSlot.trim() || "時段待定",
+      estimatedSessions: n,
+      rate: rate.trim() || "面議",
+      deadline: deadline.trim() || "—",
+      status: "matching",
+      targetTalents: talents,
+      targetRegions: regions,
+    })
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 p-4" onClick={onClose}>
+      <div
+        className="bg-white rounded-2xl shadow-2xl w-full max-w-lg max-h-[90vh] overflow-y-auto"
+        onClick={e => e.stopPropagation()}
+      >
+        <div className="flex items-center justify-between px-5 py-4 border-b border-slate-100 sticky top-0 bg-white">
+          <h2 className="font-bold text-slate-800 flex items-center gap-2"><Plus className="w-4 h-4 text-emerald-600" /> 新增派課需求</h2>
+          <button onClick={onClose} className="text-slate-400 hover:text-slate-600"><X className="w-5 h-5" /></button>
+        </div>
+
+        <div className="p-5 space-y-4">
+          <Field label="機構 / 課程名稱" required>
+            <Input value={organization} onChange={e => setOrganization(e.target.value)} placeholder="例：三重國小課後照顧" />
+          </Field>
+
+          <Field label="課程類型">
+            <div className="flex flex-wrap gap-2">
+              {["社團課程", "營隊課程", "活動表演", "到府教學"].map(c => (
+                <Chip key={c} active={courseType === c} onClick={() => setCourseType(c)}>{c}</Chip>
+              ))}
+            </div>
+          </Field>
+
+          {/* 推播對象 — 才藝標籤 */}
+          <Field label="推播對象 ① 才藝標籤" required hint="可複選；老師才藝命中任一即收到推播">
+            <div className="flex flex-wrap gap-1.5">
+              {ALL_TALENTS.map(t => (
+                <Chip key={t} active={talents.includes(t)} onClick={() => toggleTalent(t)}>{t}</Chip>
+              ))}
+            </div>
+          </Field>
+
+          {/* 推播對象 — 地區 */}
+          <Field label="推播對象 ② 地區" hint="不選＝不限地區（氣球等表演類預設可跨區）">
+            <div className="flex flex-wrap gap-1.5">
+              {ALL_REGIONS.map(r => (
+                <Chip key={r} active={regions.includes(r)} onClick={() => toggleRegion(r)}>{r}</Chip>
+              ))}
+              <Chip active={regions.length === 0} onClick={() => setRegions([])}>不限地區</Chip>
+            </div>
+          </Field>
+
+          <div className="grid grid-cols-2 gap-3">
+            <Field label="地點"><Input value={location} onChange={e => setLocation(e.target.value)} placeholder="台北市大安區" /></Field>
+            <Field label="堂數"><Input value={sessions} onChange={e => setSessions(e.target.value)} placeholder="16" inputMode="numeric" /></Field>
+            <Field label="時段"><Input value={timeSlot} onChange={e => setTimeSlot(e.target.value)} placeholder="每週三 15:30–17:00" /></Field>
+            <Field label="鐘點"><Input value={rate} onChange={e => setRate(e.target.value)} placeholder="1,000 / 堂" /></Field>
+            <Field label="報名截止"><Input value={deadline} onChange={e => setDeadline(e.target.value)} placeholder="2026-06-30" /></Field>
+          </div>
+
+          {/* 即時預覽符合老師 */}
+          <div className="rounded-xl border border-emerald-100 bg-emerald-50/50 p-3">
+            <div className="text-xs text-emerald-800 font-bold mb-2 flex items-center gap-1.5">
+              <Users className="w-3.5 h-3.5" /> 符合條件 {matched.length} 位老師將收到推播
+            </div>
+            {talents.length === 0 ? (
+              <div className="text-xs text-emerald-700/70">請先選擇至少一個才藝標籤</div>
+            ) : matched.length === 0 ? (
+              <div className="text-xs text-emerald-700/70">目前沒有符合的已綁定老師，試試放寬地區或標籤</div>
+            ) : (
+              <div className="flex flex-wrap gap-1.5">
+                {matched.map(t => (
+                  <span key={t.id} className="inline-flex items-center gap-1 bg-white rounded-full pl-1 pr-2.5 py-0.5 text-[11px] text-slate-700 border border-emerald-100">
+                    <span className="w-5 h-5 rounded-full bg-gradient-to-br from-emerald-400 to-teal-500 flex items-center justify-center text-white text-[10px] font-bold">{t.name.charAt(0)}</span>
+                    {t.name}・{t.city}
+                  </span>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
+
+        <div className="flex items-center justify-end gap-2 px-5 py-4 border-t border-slate-100 sticky bottom-0 bg-white">
+          <Button variant="outline" onClick={onClose}>取消</Button>
+          <Button onClick={submit} disabled={!canCreate} className="text-white" style={{ backgroundColor: canCreate ? "#06C755" : "#cbd5e1" }}>
+            <Check className="w-4 h-4 mr-1.5" /> 建立並進入媒合
+          </Button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+function Field({ label, required, hint, children }: { label: string; required?: boolean; hint?: string; children: React.ReactNode }) {
+  return (
+    <div>
+      <label className="text-xs font-bold text-slate-600 mb-1 flex items-center gap-1">
+        {label}{required && <span className="text-rose-500">*</span>}
+        {hint && <span className="font-normal text-slate-400">— {hint}</span>}
+      </label>
+      {children}
+    </div>
+  )
+}
+
+function Chip({ active, onClick, children }: { active: boolean; onClick: () => void; children: React.ReactNode }) {
+  return (
+    <button
+      onClick={onClick}
+      className={`rounded-full px-3 py-1 text-xs font-medium border transition-colors ${
+        active ? "text-white border-transparent" : "text-slate-600 border-slate-200 hover:border-slate-300"
+      }`}
+      style={active ? { backgroundColor: "#06C755" } : undefined}
+    >
+      {children}
+    </button>
   )
 }
 

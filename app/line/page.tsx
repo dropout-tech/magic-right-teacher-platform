@@ -2,7 +2,7 @@
 
 import { useState } from "react"
 import Link from "next/link"
-import { ArrowLeft, LayoutDashboard, Inbox, Send, Megaphone, Bot, Users, Settings } from "lucide-react"
+import { ArrowLeft, LayoutDashboard, Inbox, Send, Megaphone, Bot, Users, Settings, Wallet } from "lucide-react"
 import { LineLogo, LINE_GREEN } from "@/components/line/line-phone"
 import { LineDashboard } from "@/components/line/line-dashboard"
 import { LineInbox } from "@/components/line/line-inbox"
@@ -10,14 +10,16 @@ import { LineDispatch } from "@/components/line/line-dispatch"
 import { LineBroadcast } from "@/components/line/line-broadcast"
 import { LineAutoReply } from "@/components/line/line-autoreply"
 import { LineRoster } from "@/components/line/line-roster"
+import { LineSalary } from "@/components/line/line-salary"
 import { lineStats } from "@/lib/line-data"
 
-export type LineSection = "dashboard" | "inbox" | "dispatch" | "broadcast" | "autoreply" | "roster"
+export type LineSection = "dashboard" | "inbox" | "dispatch" | "broadcast" | "autoreply" | "roster" | "salary"
 
 const NAV: { id: LineSection; label: string; icon: React.ReactNode }[] = [
   { id: "dashboard", label: "總覽儀表板", icon: <LayoutDashboard className="w-5 h-5" /> },
   { id: "inbox", label: "共享收件匣", icon: <Inbox className="w-5 h-5" /> },
   { id: "dispatch", label: "派課中心", icon: <Send className="w-5 h-5" /> },
+  { id: "salary", label: "薪資查詢", icon: <Wallet className="w-5 h-5" /> },
   { id: "broadcast", label: "群發中心", icon: <Megaphone className="w-5 h-5" /> },
   { id: "autoreply", label: "自動回覆", icon: <Bot className="w-5 h-5" /> },
   { id: "roster", label: "老師 LINE 名冊", icon: <Users className="w-5 h-5" /> },
@@ -91,6 +93,7 @@ export default function LineAdminPage() {
           {section === "dashboard" && <LineDashboard onNavigate={setSection} />}
           {section === "inbox" && <LineInbox />}
           {section === "dispatch" && <LineDispatch />}
+          {section === "salary" && <LineSalary />}
           {section === "broadcast" && <LineBroadcast />}
           {section === "autoreply" && <LineAutoReply />}
           {section === "roster" && <LineRoster />}

@@ -19,7 +19,15 @@ import {
   type CourseSession,
   type OngoingCourse,
 } from "@/lib/line-data"
-import { LinePhone, ChatBubble, SystemNote, CheckinCardBubble } from "@/components/line/line-phone"
+import { LinePhone, ChatBubble, SystemNote, ChoiceCardBubble, PhotoCheckinCard } from "@/components/line/line-phone"
+
+// 課程類型（官方帳號當天請老師確認）
+const COURSE_TYPE_OPTIONS = [
+  { key: "tutor", label: "家教課", sub: "一對一 / 到府教學" },
+  { key: "camp", label: "營隊課程", sub: "寒暑假 / 短期密集" },
+  { key: "partner", label: "合作單位", sub: "學校社團 / 安親班" },
+]
+const courseTypeLabel = (key: string | null) => COURSE_TYPE_OPTIONS.find(o => o.key === key)?.label ?? ""
 
 function toMin(t: string) { const [h, m] = t.split(":").map(Number); return h * 60 + m }
 function fromMin(v: number) { return `${String(Math.floor(v / 60)).padStart(2, "0")}:${String(v % 60).padStart(2, "0")}` }
@@ -37,6 +45,15 @@ export function LineCheckin() {
     seedCourses.map(c => ({ ...c, sessions: c.sessions.map(s => ({ ...s })) })),
   )
   const [selectedId, setSelectedId] = useState(seedCourses[0].id)
+  // 老師端 LINE 打卡流程：選課別 → 上傳抵達照片 → 上課 / 下課打卡（demo 用，本機狀態）
+  const [courseType, setCourseType] = useState<string | null>(null)
+  const [photo, setPhoto] = useState(false)
+
+  const selectCourse = (id: string) => {
+    setSelectedId(id)
+    setCourseType(null)
+    setPhoto(false)
+  }
 
   const course = courses.find(c => c.id === selectedId)!
   const sum = courseSummary(course)
@@ -63,7 +80,7 @@ export function LineCheckin() {
           return (
             <button
               key={c.id}
-              onClick={() => setSelectedId(c.id)}
+              onClick={() => selectCourse(c.id)}
               className={`w-full text-left rounded-xl border p-4 transition-all ${
                 selectedId === c.id ? "border-emerald-400 bg-emerald-50/40 ring-1 ring-emerald-200" : "border-slate-200 bg-white hover:border-slate-300"
               }`}
@@ -177,36 +194,64 @@ export function LineCheckin() {
             </div>
           </div>
 
-          {/* 老師端 LINE 打卡 */}
+          {/* 老師端 LINE 打卡（官方帳號前一天提醒 → 選課別 → 上傳抵達照片 → 打卡） */}
           <div className="flex flex-col items-center">
             <div className="text-xs text-slate-400 mb-2">老師在 LINE 打卡的畫面（{course.teacherName}）</div>
             <LinePhone accountName="萊特魔數學院" showMenu>
-              <SystemNote>今日課程提醒</SystemNote>
-              <ChatBubble side="us" time="08:00" auto>
-                老師早！今天 {todaySession ? `${todaySession.plannedStart}` : ""} {course.organization}，記得到場後上課打卡 📍
-              </ChatBubble>
               {todaySession ? (
-                <CheckinCardBubble
-                  organization={course.organization}
-                  sessionNo={todaySession.no}
-                  planned={`${todaySession.plannedStart}–${todaySession.plannedEnd}`}
-                  checkIn={todaySession.checkIn}
-                  checkOut={todaySession.checkOut}
-                  onCheckIn={checkIn}
-                  onCheckOut={checkOut}
-                />
+                <>
+                  {/* 1. 前一天，官方帳號主動提醒 */}
+                  <SystemNote>前一天 20:00</SystemNote>
+                  <ChatBubble side="us" time="20:00" auto>
+                    【明日課程提醒】老師好 🙌{"\n"}明天 {todaySession.date.slice(5)}（{todaySession.weekday}）{todaySession.plannedStart} 在「{course.organization}」有課，記得準時到場喔！
+                  </ChatBubble>
+
+                  {/* 2. 上課當天，跳出課程類型選擇框 */}
+                  <SystemNote>上課當天 {todaySession.plannedStart} 前</SystemNote>
+                  <ChatBubble side="us" time="14:20" auto>到現場了嗎？先確認今天的課程類型 👇</ChatBubble>
+                  <ChoiceCardBubble
+                    options={COURSE_TYPE_OPTIONS}
+                    picked={courseType}
+                    onPick={setCourseType}
+                  />
+
+                  {/* 3 & 4. 上傳抵達照片 → 上課打卡 → 下課打卡下班 */}
+                  {courseType && (
+                    <>
+                      <ChatBubble side="us" time="14:21" auto>
+                        已記錄為「{courseTypeLabel(courseType)}」。請上傳抵達現場照片並打卡上課時間 📷
+                      </ChatBubble>
+                      <PhotoCheckinCard
+                        organization={course.organization}
+                        sessionNo={todaySession.no}
+                        planned={`${todaySession.plannedStart}–${todaySession.plannedEnd}`}
+                        courseTypeLabel={courseTypeLabel(courseType)}
+                        photo={photo || !!todaySession.checkIn}
+                        checkIn={todaySession.checkIn}
+                        checkOut={todaySession.checkOut}
+                        onUploadPhoto={() => setPhoto(true)}
+                        onCheckIn={checkIn}
+                        onCheckOut={checkOut}
+                      />
+                    </>
+                  )}
+
+                  {todaySession.checkIn && !todaySession.checkOut && (
+                    <ChatBubble side="us" time={todaySession.checkIn} auto>已記錄上課 {todaySession.checkIn}，下課別忘了打卡下班 👌</ChatBubble>
+                  )}
+                  {todaySession.checkIn && todaySession.checkOut && (
+                    <ChatBubble side="us" time={todaySession.checkOut} auto>本堂完成！時數 {sessionHours(todaySession)}h 已記入鐘點 ✅</ChatBubble>
+                  )}
+                </>
               ) : (
-                <ChatBubble side="them" time="—">本週課程都已完成打卡 🎉</ChatBubble>
-              )}
-              {todaySession?.checkIn && !todaySession?.checkOut && (
-                <ChatBubble side="us" time={todaySession.checkIn} auto>已記錄上課 {todaySession.checkIn}，下課再回來打卡 👌</ChatBubble>
-              )}
-              {todaySession?.checkIn && todaySession?.checkOut && (
-                <ChatBubble side="us" time={todaySession.checkOut} auto>本堂完成！時數 {sessionHours(todaySession)}h 已記入鐘點 ✅</ChatBubble>
+                <>
+                  <SystemNote>今日課程提醒</SystemNote>
+                  <ChatBubble side="them" time="—">本週課程都已完成打卡 🎉</ChatBubble>
+                </>
               )}
             </LinePhone>
             <p className="text-[11px] text-slate-400 mt-2 text-center max-w-[260px]">
-              點手機裡的「上課打卡 / 下課打卡」，左邊的紀錄與上方鐘點會即時更新。
+              官方帳號前一天提醒 → 選課別 → 上傳抵達照片 → 上課／下課打卡，左邊紀錄與上方鐘點即時更新。
             </p>
           </div>
         </div>
