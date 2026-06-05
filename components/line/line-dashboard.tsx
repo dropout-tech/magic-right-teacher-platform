@@ -36,7 +36,10 @@ import type { LineSection } from "@/app/line/page"
 const PIE_COLORS = ["#10b981", "#f43f5e", "#3b82f6", "#a855f7", "#f97316", "#f59e0b", "#94a3b8"]
 
 export function LineDashboard({ onNavigate }: { onNavigate: (s: LineSection) => void }) {
-  const savedAnnual = (lineStats.adminMonthlySalary * 12).toLocaleString()
+  const annualPerAdmin = lineStats.adminMonthlySalary * 12
+  const teachersNationwide = 300
+  const adminsCovered = Math.round(teachersNationwide / 100)
+  const annualSaved = adminsCovered * annualPerAdmin
   const openConvs = conversations.filter(c => c.status === "open")
   const matching = dispatchRequests.filter(d => d.status !== "filled")
 
@@ -54,7 +57,8 @@ export function LineDashboard({ onNavigate }: { onNavigate: (s: LineSection) => 
             <span className="text-lg font-medium mb-1">的常見詢問由系統自動處理</span>
           </div>
           <p className="text-white/90 mt-2 leading-relaxed">
-            相當於每月省下 <b className="font-bold">1 位專職行政</b>（月薪約 {lineStats.adminMonthlySalary.toLocaleString()} 元、年約 {savedAnnual} 元），
+            相當於 <b className="font-bold">1 位專職行政就能管理 100 位老師</b>。以萊特全臺約 {teachersNationwide} 位老師估算，
+            等於省下 <b className="font-bold">{adminsCovered} 位專職行政、年約 {annualSaved.toLocaleString()} 元</b>的人力成本（{adminsCovered} × 年薪 {annualPerAdmin.toLocaleString()} 元）。
             老師、家長、派課全部收斂進<b>同一個收件匣</b>，不再淹沒在零散的 LINE 群裡。
           </p>
         </div>
